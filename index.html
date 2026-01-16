@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1f2937">
+  
+  <!-- PWA Meta Tags -->
+  <meta name="application-name" content="Number Merge">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Number Merge">
+  <meta name="description" content="Merge numbers to create higher values in this addictive puzzle game">
+  
+  <!-- Apple Touch Icon (you'll need to create this) -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%231f2937'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='200' fill='%23fff' font-family='Arial, sans-serif' font-weight='bold'>2048</text></svg>">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='80'>🎮</text></svg>">
+  
+  <title>Number Merge</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Web App Manifest -->
+  <link rel="manifest" href="data:application/json,{%22name%22:%22Number%20Merge%22,%22short_name%22:%22NumMerge%22,%22start_url%22:%22./%22,%22display%22:%22standalone%22,%22background_color%22:%22%231f2937%22,%22theme_color%22:%22%231f2937%22,%22orientation%22:%22portrait%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%231f2937'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='200' fill='%23fff' font-family='Arial, sans-serif' font-weight='bold'>2048</text></svg>%22,%22sizes%22:%22512x512%22,%22type%22:%22image/svg+xml%22}]}">
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      position: fixed;
+      width: 100%;
+      height: 100%;
+    }
+    #root {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const GRID_WIDTH = 5;
+    const GRID_HEIGHT = 7;
+
+    const COLORS = {
+      1: '#FFE0E9',
+      2: '#FFD4E5',
+      4: '#FFC4DD',
+      8: '#FFB4D5',
+      16: '#FFA4CD',
+      32: '#E8B4F0',
+      64: '#D4A5F3',
+      128: '#C096F5',
+      256: '#AC87F7',
+      512: '#9F7AEA',
+      1024: '#8B6AD1',
+      2048: '#7C5AC0',
+      4096: '#A8E6CF',
+      8192: '#94D9B3',
+      16384: '#80CCB0',
+      32768: '#A8D8EA',
+      65536: '#94CEEA',
+      131072: '#80C4EA',
+      262144: '#B4A7D6',
+      524288: '#CAB8E8',
+      1048576: '#E0C9F5',
+      2097152: '#FFE0E9',
+      4194304: '#FFD4E5',
+      8388608: '#FFC4DD',
+      16777216: '#FFB4D5',
+    };
+
+    const NumberMergeGame = () => {
+      const [grid, setGrid] = useState([]);
+      const [path, setPath] = useState([]);
+      const [isDragging, setIsDragging] = useState(false);
+      const [score, setScore] = useState(0);
+      const [highestValue, setHighestValue] = useState(1);
+      const [deprecatedValues, setDeprecatedValues] = useState(new Set());
+      const [animatingCells, setAnimatingCells] = useState(new Map());
+      const [removedCells, setRemovedCells] = useState(new Set());
+      const [suckingCells, setSuckingCells] = useState(new Map());
+      const [mergedCell, setMergedCell] = useState(null);
+      const [isProcessing, setIsProcessing] = useState(false);
+      const gridRef = useRef(null);
+      const [debugInfo, setDebugInfo] = useState('');
+
+      useEffect(() => {
+        loadGame();
+      }, []);
+
+      useEffect(() => {
+        if (grid.length > 0) {
+          saveGame();
+        }
+      }, [grid, score, deprecatedValues, highestValue]);
+
+      const saveGame = () => {
+        const gameState = {
+          grid,
+          score,
+          highestValue,
+          deprecatedValues: Array.from(deprecatedValues),
+        };
+        localStorage.setItem('numberMergeGame', JSON.stringify(gameState));
+      };
+
+      const loadGame = () => {
+        const saved = localStorage.getItem('numberMergeGame');
+        if (saved) {
+          const { grid: savedGrid, score: savedScore, highestValue: savedHighest, deprecatedValues: savedDeprecated } = JSON.parse(saved);
+          setGrid(savedGrid);
+          setScore(savedScore);
+          setHighestValue(savedHighest || 1);
+          setDeprecatedValues(new Set(savedDeprecated));
+        } else {
+          initializeGrid();
+        }
+      };
+
+      const getAvailableNumbers = () => {
+        const allNumbers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216];
+        
+        const highestIndex = allNumbers.indexOf(highestValue);
+        const startIndex = Math.max(0, highestIndex - 3);
+        const endIndex = Math.max(startIndex + 4, highestIndex - 1);
+        const rangeNumbers = allNumbers.slice(startIndex, endIndex);
+        
+        return rangeNumbers.filter(n => !deprecatedValues.has(n));
+      };
+
+      const getRandomNumber = () => {
+        const available = getAvailableNumbers();
+        const weights = available.map((_, i) => Math.pow(0.7, i));
+        const totalWeight = weights.reduce((a, b) => a + b, 0);
+        let random = Math.random() * totalWeight;
+        
+        for (let i = 0; i < available.length; i++) {
+          random -= weights[i];
+          if (random <= 0) return available[i];
+        }
+        return available[0];
+      };
+
+      const initializeGrid = () => {
+        const newGrid = [];
+        for (let i = 0; i < GRID_HEIGHT; i++) {
+          const row = [];
+          for (let j = 0; j < GRID_WIDTH; j++) {
+            row.push(getRandomNumber());
+          }
+          newGrid.push(row);
+        }
+        setGrid(newGrid);
+        setScore(0);
+        setHighestValue(1);
+        setDeprecatedValues(new Set());
+      };
+
+      const formatNumber = (num) => {
+        if (num >= 1000000) {
+          return `${Math.round(num / 1000000)}M`;
+        }
+        if (num >= 1000) {
+          return `${Math.round(num / 1000)}K`;
+        }
+        return num;
+      };
+
+      const getCellPosition = (row, col) => {
+        if (!gridRef.current) return null;
+        const cells = gridRef.current.querySelectorAll('.grid-cell');
+        const cell = cells[row * GRID_WIDTH + col];
+        if (!cell) return null;
+        const rect = cell.getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+        };
+      };
+
+      const getCellFromPointer = (x, y) => {
+        const element = document.elementFromPoint(x, y);
+        if (!element || !element.classList.contains('grid-cell')) return null;
+        
+        const cells = gridRef.current?.querySelectorAll('.grid-cell');
+        if (!cells) return null;
+        
+        const index = Array.from(cells).indexOf(element);
+        if (index === -1) return null;
+        
+        return {
+          row: Math.floor(index / GRID_WIDTH),
+          col: index % GRID_WIDTH
+        };
+      };
+
+      const isAdjacent = (cell1, cell2) => {
+        const rowDiff = Math.abs(cell1.row - cell2.row);
+        const colDiff = Math.abs(cell1.col - cell2.col);
+        return rowDiff <= 1 && colDiff <= 1 && !(rowDiff === 0 && colDiff === 0);
+      };
+
+      const canAddToPath = (newCell) => {
+        if (path.length === 0) return true;
+        
+        const lastCell = path[path.length - 1];
+        
+        if (path.length >= 2) {
+          const prevCell = path[path.length - 2];
+          if (prevCell.row === newCell.row && prevCell.col === newCell.col) {
+            return true;
+          }
+        }
+        
+        const alreadyInPath = path.some(cell => cell.row === newCell.row && cell.col === newCell.col);
+        if (alreadyInPath) {
+          setDebugInfo(`Already in path`);
+          return false;
+        }
+        
+        if (!isAdjacent(lastCell, newCell)) {
+          setDebugInfo(`Not adjacent`);
+          return false;
+        }
+        
+        const lastValue = grid[lastCell.row][lastCell.col];
+        const newValue = grid[newCell.row][newCell.col];
+        
+        if (path.length === 1) {
+          if (lastValue !== newValue) {
+            setDebugInfo(`First move: need ${lastValue}, got ${newValue}`);
+            return false;
+          }
+          return true;
+        }
+        
+        const doubleValue = lastValue * 2;
+        if (newValue !== lastValue && newValue !== doubleValue) {
+          setDebugInfo(`Need ${lastValue} or ${doubleValue}, got ${newValue}`);
+          return false;
+        }
+        
+        return true;
+      };
+
+      const triggerHaptic = (style = 'light') => {
+        try {
+          if ('vibrate' in navigator) {
+            const patterns = {
+              light: 10,
+              medium: 20,
+              heavy: 50
+            };
+            navigator.vibrate(patterns[style] || 10);
+          }
+        } catch (e) {
+          console.log('Haptic feedback not supported');
+        }
+      };
+
+      const handleDragStart = (row, col) => {
+        setIsDragging(true);
+        setPath([{ row, col }]);
+        setDebugInfo(`Started at ${row},${col}`);
+        triggerHaptic('medium');
+      };
+
+      const handlePointerMove = (e) => {
+        if (!isDragging) return;
+
+        const cell = getCellFromPointer(e.clientX, e.clientY);
+        if (!cell) {
+          setDebugInfo(`Moving but no cell found`);
+          return;
+        }
+
+        setDebugInfo(`Over cell ${cell.row},${cell.col}`);
+
+        const newCell = { row: cell.row, col: cell.col };
+        const lastCell = path[path.length - 1];
+        
+        if (lastCell && lastCell.row === newCell.row && lastCell.col === newCell.col) {
+          return;
+        }
+
+        if (path.length >= 2) {
+          const prevCell = path[path.length - 2];
+          if (prevCell.row === newCell.row && prevCell.col === newCell.col) {
+            setPath(path.slice(0, -1));
+            triggerHaptic('light');
+            return;
+          }
+        }
+
+        if (canAddToPath(newCell)) {
+          setPath([...path, newCell]);
+          setDebugInfo(`Added ${cell.row},${cell.col} to path`);
+          triggerHaptic('light');
+        } else {
+          setDebugInfo(`Can't add ${cell.row},${cell.col}`);
+        }
+      };
+
+      const getPathValue = () => {
+        if (path.length === 0) return 0;
+        
+        let currentValue = grid[path[0].row][path[0].col];
+        let sameValueCount = 1;
+        let doublesApplied = 0;
+        
+        for (let i = 1; i < path.length; i++) {
+          const cellValue = grid[path[i].row][path[i].col];
+          const prevValue = grid[path[i - 1].row][path[i - 1].col];
+          
+          if (cellValue > prevValue) {
+            currentValue *= 2;
+            sameValueCount = 1;
+            doublesApplied = 0;
+          }
+          else if (cellValue === prevValue) {
+            sameValueCount++;
+            
+            const shouldDouble = 
+              sameValueCount === 2 || 
+              sameValueCount === 3 || 
+              (sameValueCount > 3 && sameValueCount % 2 === 1);
+            
+            if (shouldDouble) {
+              currentValue *= 2;
+              doublesApplied++;
+            }
+          }
+        }
+        
+        return currentValue;
+      };
+
+      const handleDragEnd = async () => {
+        if (!isDragging || path.length < 2 || isProcessing) {
+          setIsDragging(false);
+          setPath([]);
+          return;
+        }
+
+        setIsProcessing(true);
+        
+        const finalValue = getPathValue();
+        const lastCell = path[path.length - 1];
+        
+        const suckingAnimations = new Map();
+        for (let i = 0; i < path.length - 1; i++) {
+          const fromCell = path[i];
+          const toCell = lastCell;
+          const key = `${fromCell.row}-${fromCell.col}`;
+          
+          const deltaRow = toCell.row - fromCell.row;
+          const deltaCol = toCell.col - fromCell.col;
+          
+          suckingAnimations.set(key, { deltaRow, deltaCol });
+        }
+        
+        setIsDragging(false);
+        setPath([]);
+        setSuckingCells(suckingAnimations);
+        
+        setMergedCell(`${lastCell.row}-${lastCell.col}`);
+        triggerHaptic('heavy');
+        
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
+        const cellsToRemove = new Set();
+        for (let i = 0; i < path.length - 1; i++) {
+          cellsToRemove.add(`${path[i].row}-${path[i].col}`);
+        }
+        setRemovedCells(cellsToRemove);
+        setSuckingCells(new Map());
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        const newGrid = grid.map(row => [...row]);
+        
+        newGrid[lastCell.row][lastCell.col] = finalValue;
+        
+        const cellAnimations = new Map();
+        
+        for (let i = 0; i < path.length - 1; i++) {
+          const { row, col } = path[i];
+          
+          for (let r = row; r > 0; r--) {
+            newGrid[r][col] = newGrid[r - 1][col];
+            cellAnimations.set(`${r}-${col}`, 1);
+          }
+          
+          newGrid[0][col] = getRandomNumber();
+          cellAnimations.set(`0-${col}`, row + 1);
+        }
+        
+        setGrid(newGrid);
+        setRemovedCells(new Set());
+        setAnimatingCells(cellAnimations);
+        
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        setScore(score + finalValue);
+        checkDeprecation(finalValue);
+        setAnimatingCells(new Map());
+        
+        if (finalValue > highestValue) {
+          setHighestValue(finalValue);
+          cleanGridBasedOnRange(newGrid, finalValue);
+        }
+        
+        setTimeout(() => setMergedCell(null), 300);
+        setIsProcessing(false);
+      };
+
+      const cleanGridBasedOnRange = (currentGrid, newHighest) => {
+        const allNumbers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216];
+        const highestIndex = allNumbers.indexOf(newHighest);
+        const startIndex = Math.max(0, highestIndex - 3);
+        const endIndex = Math.max(startIndex + 4, highestIndex - 1);
+        const validRange = allNumbers.slice(startIndex, endIndex);
+        
+        const previousLowest = startIndex > 0 ? allNumbers[startIndex - 1] : null;
+        
+        if (previousLowest) {
+          const updatedGrid = currentGrid.map(row =>
+            row.map(cell => {
+              if (cell === previousLowest) {
+                return getRandomNumber();
+              }
+              return cell;
+            })
+          );
+          
+          setGrid(updatedGrid);
+        }
+      };
+
+      const checkDeprecation = (achievedValue) => {
+        const milestones = {
+          128: 1,
+          512: 2,
+          2048: 4,
+          8192: 8,
+          32768: 16,
+          131072: 32,
+          524288: 64,
+        };
+        
+        if (milestones[achievedValue]) {
+          const valueToDeprecate = milestones[achievedValue];
+          if (!deprecatedValues.has(valueToDeprecate)) {
+            const newDeprecated = new Set(deprecatedValues);
+            newDeprecated.add(valueToDeprecate);
+            setDeprecatedValues(newDeprecated);
+            
+            const newGrid = grid.map(row => 
+              row.map(cell => cell === valueToDeprecate ? getRandomNumber() : cell)
+            );
+            setGrid(newGrid);
+          }
+        }
+      };
+
+      const pathValue = getPathValue();
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-200 p-4">
+          <style>
+            {`
+              @keyframes dropIn-1 {
+                from { transform: translateY(-68px); }
+                to { transform: translateY(0); }
+              }
+              @keyframes dropIn-2 {
+                from { transform: translateY(-136px); }
+                to { transform: translateY(0); }
+              }
+              @keyframes dropIn-3 {
+                from { transform: translateY(-204px); }
+                to { transform: translateY(0); }
+              }
+              @keyframes dropIn-4 {
+                from { transform: translateY(-272px); }
+                to { transform: translateY(0); }
+              }
+              @keyframes dropIn-5 {
+                from { transform: translateY(-340px); }
+                to { transform: translateY(0); }
+              }
+              @keyframes dropIn-6 {
+                from { transform: translateY(-408px); }
+                to { transform: translateY(0); }
+              }
+              @keyframes dropIn-7 {
+                from { transform: translateY(-476px); }
+                to { transform: translateY(0); }
+              }
+              @keyframes popMerge {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.15); }
+                100% { transform: scale(1); }
+              }
+            `}
+          </style>
+          <div className="bg-white rounded-3xl p-8 shadow-2xl" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-4xl font-bold text-gray-800" style={{ fontWeight: 600 }}>Number Merge</h1>
+              <div className="bg-purple-100 px-4 py-2 rounded-full">
+                <span className="text-purple-800 text-lg font-semibold">Score: {score}</span>
+              </div>
+            </div>
+            
+            <div className="text-gray-600 text-xs mb-2 h-6">{debugInfo}</div>
+            
+            <div className="mb-6 text-center" style={{ height: '80px' }}>
+              {path.length > 0 && (
+                <>
+                  <div className="text-gray-600 text-sm mb-2 font-medium">Next Value</div>
+                  <div 
+                    className="inline-block px-8 py-3 rounded-2xl text-3xl font-bold"
+                    style={{ 
+                      backgroundColor: COLORS[pathValue] || '#E0E0E0', 
+                      color: '#333',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                    }}
+                  >
+                    {formatNumber(pathValue)}
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <div 
+              ref={gridRef}
+              className="grid gap-3 relative select-none bg-gray-900 p-4 rounded-3xl"
+              style={{ gridTemplateColumns: `repeat(${GRID_WIDTH}, 1fr)`, touchAction: 'none' }}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handleDragEnd}
+              onPointerCancel={handleDragEnd}
+            >
+              {grid.map((row, rowIndex) =>
+                row.map((value, colIndex) => {
+                  const cellKey = `${rowIndex}-${colIndex}`;
+                  const isInPath = path.some(p => p.row === rowIndex && p.col === colIndex);
+                  const dropDistance = animatingCells.get(cellKey);
+                  const isRemoved = removedCells.has(cellKey);
+                  const isMerged = mergedCell === cellKey;
+                  const suckDirection = suckingCells.get(cellKey);
+                  
+                  let transform = 'translateY(0)';
+                  if (isInPath) {
+                    transform = 'scale(1.08)';
+                  } else if (suckDirection) {
+                    const moveX = suckDirection.deltaCol * 68;
+                    const moveY = suckDirection.deltaRow * 68;
+                    transform = `translate(${moveX}px, ${moveY}px) scale(0.5)`;
+                  } else if (isRemoved) {
+                    transform = 'scale(0)';
+                  }
+                  
+                  return (
+                    <div
+                      key={cellKey}
+                      className="grid-cell w-16 h-16 flex items-center justify-center rounded-2xl font-bold text-xl cursor-pointer"
+                      style={{
+                        backgroundColor: COLORS[value] || '#E0E0E0',
+                        color: '#333',
+                        transform: transform,
+                        boxShadow: isInPath 
+                          ? '0 8px 24px rgba(0,0,0,0.2), 0 0 0 3px rgba(66, 153, 225, 0.5)' 
+                          : isMerged
+                            ? '0 8px 24px rgba(0,0,0,0.25)'
+                            : '0 2px 8px rgba(0,0,0,0.1)',
+                        touchAction: 'none',
+                        opacity: isRemoved ? 0 : suckDirection ? 0.7 : 1,
+                        transition: suckDirection
+                          ? 'all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55)'
+                          : isRemoved 
+                            ? 'all 0.3s ease-out' 
+                            : dropDistance
+                              ? 'transform 0.8s cubic-bezier(0.34, 1.2, 0.64, 1)' 
+                              : 'all 0.2s ease',
+                        ...(dropDistance && {
+                          animation: `dropIn-${dropDistance} 0.8s cubic-bezier(0.34, 1.2, 0.64, 1)`,
+                          animationFillMode: 'backwards'
+                        }),
+                        ...(isMerged && !suckDirection && {
+                          animation: 'popMerge 0.4s ease-out'
+                        })
+                      }}
+                      onPointerDown={() => !isProcessing && handleDragStart(rowIndex, colIndex)}
+                    >
+                      {formatNumber(value)}
+                    </div>
+                  );
+                })
+              )}
+              
+              {path.length > 1 && (
+                <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%' }}>
+                  {path.slice(0, -1).map((cell, index) => {
+                    const nextCell = path[index + 1];
+                    const pos1 = getCellPosition(cell.row, cell.col);
+                    const pos2 = getCellPosition(nextCell.row, nextCell.col);
+                    if (!pos1 || !pos2) return null;
+                    
+                    const containerRect = gridRef.current?.getBoundingClientRect();
+                    if (!containerRect) return null;
+                    
+                    const x1 = pos1.x - containerRect.left;
+                    const y1 = pos1.y - containerRect.top;
+                    const x2 = pos2.x - containerRect.left;
+                    const y2 = pos2.y - containerRect.top;
+                    
+                    return (
+                      <line
+                        key={index}
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke="#4299E1"
+                        strokeWidth="8"
+                        strokeLinecap="round"
+                        opacity="0.9"
+                      />
+                    );
+                  })}
+                </svg>
+              )}
+            </div>
+            
+            <button
+              onClick={initializeGrid}
+              className="mt-8 w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold py-4 px-6 rounded-2xl transition-all shadow-lg"
+            >
+              New Game
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<NumberMergeGame />, document.getElementById('root'));
+  </script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('data:text/javascript,self.addEventListener("install",%20()%20=>%20self.skipWaiting());self.addEventListener("activate",%20()%20=>%20self.clients.claim());')
+          .then(() => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
