@@ -135,8 +135,11 @@
         const allNumbers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216];
         
         const highestIndex = allNumbers.indexOf(highestValue);
-        const startIndex = Math.max(0, highestIndex - 3);
-        const endIndex = Math.max(startIndex + 4, highestIndex - 1);
+        
+        // Create a stricter ceiling: spawn values only up to 3 steps below highest
+        // This makes the game more challenging
+        const startIndex = Math.max(0, highestIndex - 5);
+        const endIndex = Math.max(startIndex + 3, highestIndex - 2); // Only 3-4 values, max 3 below highest
         const rangeNumbers = allNumbers.slice(startIndex, endIndex);
         
         return rangeNumbers.filter(n => !deprecatedValues.has(n));
@@ -361,6 +364,7 @@
         const finalValue = getPathValue();
         const lastCell = path[path.length - 1];
         
+        // Step 1: Sucking animation - cells move toward merged cell
         const suckingAnimations = new Map();
         for (let i = 0; i < path.length - 1; i++) {
           const fromCell = path[i];
@@ -376,12 +380,12 @@
         setIsDragging(false);
         setPath([]);
         setSuckingCells(suckingAnimations);
-        
         setMergedCell(`${lastCell.row}-${lastCell.col}`);
         triggerHaptic('heavy');
         
         await new Promise(resolve => setTimeout(resolve, 400));
         
+        // Step 2: Remove sucked cells
         const cellsToRemove = new Set();
         for (let i = 0; i < path.length - 1; i++) {
           cellsToRemove.add(`${path[i].row}-${path[i].col}`);
@@ -389,30 +393,69 @@
         setRemovedCells(cellsToRemove);
         setSuckingCells(new Map());
         
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 200));
         
+        // Step 3: Calculate new grid state (but don't apply yet - just prep the data)
         const newGrid = grid.map(row => [...row]);
-        
         newGrid[lastCell.row][lastCell.col] = finalValue;
         
-        const cellAnimations = new Map();
+        // Collect affected columns and their removed positions
+        const affectedColumns = new Map(); // col -> array of removed row positions
         
         for (let i = 0; i < path.length - 1; i++) {
           const { row, col } = path[i];
-          
-          for (let r = row; r > 0; r--) {
-            newGrid[r][col] = newGrid[r - 1][col];
-            cellAnimations.set(`${r}-${col}`, 1);
+          if (!affectedColumns.has(col)) {
+            affectedColumns.set(col, []);
           }
-          
-          newGrid[0][col] = getRandomNumber();
-          cellAnimations.set(`0-${col}`, row + 1);
+          affectedColumns.get(col).push(row);
         }
         
+        // Step 4: First, drop existing cells down
+        const existingCellAnimations = new Map();
+        
+        affectedColumns.forEach((removedRows, col) => {
+          // Sort removed rows from top to bottom
+          removedRows.sort((a, b) => a - b);
+          
+          // For each removed position, shift cells down
+          removedRows.forEach((removedRow) => {
+            // Shift all cells above this position down by 1
+            for (let r = removedRow; r > 0; r--) {
+              if (!removedRows.includes(r - 1)) { // Don't move if the cell above was also removed
+                newGrid[r][col] = newGrid[r - 1][col];
+                // Mark this cell as needing drop animation
+                existingCellAnimations.set(`${r}-${col}`, 1);
+              }
+            }
+          });
+        });
+        
+        // Apply grid update with existing cells dropped
         setGrid(newGrid);
         setRemovedCells(new Set());
-        setAnimatingCells(cellAnimations);
+        setAnimatingCells(existingCellAnimations);
         
+        // Wait for existing cells to drop
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // Step 5: Now add new cells at the top and animate them dropping
+        const finalGrid = newGrid.map(row => [...row]);
+        const newCellAnimations = new Map();
+        
+        affectedColumns.forEach((removedRows, col) => {
+          const numRemoved = removedRows.length;
+          // Add new random numbers at the top
+          for (let i = 0; i < numRemoved; i++) {
+            finalGrid[i][col] = getRandomNumber();
+            // These new cells drop from above the grid
+            newCellAnimations.set(`${i}-${col}`, numRemoved - i);
+          }
+        });
+        
+        setGrid(finalGrid);
+        setAnimatingCells(newCellAnimations);
+        
+        // Wait for new cells to drop
         await new Promise(resolve => setTimeout(resolve, 800));
         
         setScore(score + finalValue);
@@ -421,7 +464,7 @@
         
         if (finalValue > highestValue) {
           setHighestValue(finalValue);
-          cleanGridBasedOnRange(newGrid, finalValue);
+          cleanGridBasedOnRange(finalGrid, finalValue);
         }
         
         setTimeout(() => setMergedCell(null), 300);
@@ -431,8 +474,8 @@
       const cleanGridBasedOnRange = (currentGrid, newHighest) => {
         const allNumbers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216];
         const highestIndex = allNumbers.indexOf(newHighest);
-        const startIndex = Math.max(0, highestIndex - 3);
-        const endIndex = Math.max(startIndex + 4, highestIndex - 1);
+        const startIndex = Math.max(0, highestIndex - 5);
+        const endIndex = Math.max(startIndex + 3, highestIndex - 2);
         const validRange = allNumbers.slice(startIndex, endIndex);
         
         const previousLowest = startIndex > 0 ? allNumbers[startIndex - 1] : null;
