@@ -176,15 +176,11 @@
         const formatNumber = (num) => {
   if (num < 10000) return num.toString();
 
-  // Find largest power of 2 less than or equal to num
-  const power = Math.floor(Math.log2(num));
-  const rounded = 2 ** power;
-
-  if (rounded >= 1_000_000) {
-    return `${rounded / 1_000_000}M`;
+  if (num < 1_000_000) {
+    return `${num / 1000}K`;
   }
 
-  return `${rounded / 1_000}K`;
+  return `${num / 1_000_000}M`;
 };
 
       const getCellPosition = (row, col) => {
