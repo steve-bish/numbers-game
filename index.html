@@ -1,36 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-  <meta name="theme-color" content="#1f2937">
-  
-  <!-- PWA Meta Tags -->
-  <meta name="application-name" content="Number Merge">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Number Merge">
-  <meta name="description" content="Merge numbers to create higher values in this addictive puzzle game">
-  
-  <!-- Apple Touch Icon (you'll need to create this) -->
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%231f2937'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='200' fill='%23fff' font-family='Arial, sans-serif' font-weight='bold'>2048</text></svg>">
-  
-  <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='80'>🎮</text></svg>">
-  
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+  <meta name="theme-color" content="#1f2937" />
+
   <title>Number Merge</title>
-  
-  <!-- Tailwind CSS -->
+
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- React & ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-  <!-- Web App Manifest -->
-  <link rel="manifest" href="data:application/json,{%22name%22:%22Number%20Merge%22,%22short_name%22:%22NumMerge%22,%22start_url%22:%22./%22,%22display%22:%22standalone%22,%22background_color%22:%22%231f2937%22,%22theme_color%22:%22%231f2937%22,%22orientation%22:%22portrait%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%231f2937'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='200' fill='%23fff' font-family='Arial, sans-serif' font-weight='bold'>2048</text></svg>%22,%22sizes%22:%22512x512%22,%22type%22:%22image/svg+xml%22}]}">
-  
+
   <style>
     body {
       margin: 0;
@@ -47,709 +28,263 @@
   </style>
 </head>
 <body>
-  <div id="root"></div>
+<div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
 
-    const GRID_WIDTH = 5;
-    const GRID_HEIGHT = 7;
-    
-    const CELL_SIZE = 64;
-    const CELL_RADIUS = CELL_SIZE / 2;
+/* =======================
+   CONFIG
+======================= */
 
-    const COLORS = {
-  1: '#4DD0E1',      // cyan
-  2: '#9575CD',      // purple
-  4: '#81C784',      // green
-  8: '#FFD54F',      // yellow
-  16: '#FF8A65',     // orange
-  32: '#64B5F6',     // blue
-  64: '#E57373',     // red
-  128: '#4DB6AC',    // teal
-  256: '#BA68C8',    // violet
-  512: '#AED581',    // lime
-  1024: '#FFB74D',   // amber
-  2048: '#7986CB',   // indigo
-  4096: '#F06292',   // pink
-  8192: '#4FC3F7',   // sky blue
-  16384: '#81C784',  // green (cycled, but distinct from neighbors)
+const GRID_WIDTH = 5;
+const GRID_HEIGHT = 7;
+
+const CELL_SIZE = 64;
+const CELL_RADIUS = CELL_SIZE / 2;
+
+const POWERS = [
+  1, 2, 4, 8, 16, 32, 64, 128,
+  256, 512, 1024, 2048, 4096,
+  8192, 16384, 32768, 65536,
+  131072, 262144
+];
+
+const COLORS = {
+  1: '#4DD0E1',
+  2: '#9575CD',
+  4: '#81C784',
+  8: '#FFD54F',
+  16: '#FF8A65',
+  32: '#64B5F6',
+  64: '#E57373',
+  128: '#4DB6AC',
+  256: '#BA68C8',
+  512: '#AED581',
+  1024: '#FFB74D',
+  2048: '#7986CB',
+  4096: '#F06292',
+  8192: '#4FC3F7',
+  16384: '#81C784',
   32768: '#FF8A65',
   65536: '#9575CD',
   131072: '#4DB6AC',
-  262144: '#FFD54F',
-  524288: '#E57373',
-  1048576: '#64B5F6',
-  2097152: '#BA68C8',
-  4194304: '#AED581',
-  8388608: '#FFB74D',
-  16777216: '#7986CB',
+  262144: '#FFD54F'
 };
 
-const getTextColorForBackground = (hex) => {
-  if (!hex) return '#111';
+/* =======================
+   HELPERS
+======================= */
 
-  const cleanHex = hex.replace('#', '');
-  const r = parseInt(cleanHex.substring(0, 2), 16);
-  const g = parseInt(cleanHex.substring(2, 4), 16);
-  const b = parseInt(cleanHex.substring(4, 6), 16);
-
-  // Perceived brightness (WCAG-style)
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-
-  return brightness > 160 ? '#111827' : '#FFFFFF';
-};
-
-    const NumberMergeGame = () => {
-      const [grid, setGrid] = useState([]);
-      const [path, setPath] = useState([]);
-      const [isDragging, setIsDragging] = useState(false);
-      const [score, setScore] = useState(0);
-      const [highestValue, setHighestValue] = useState(1);
-      const [deprecatedValues, setDeprecatedValues] = useState(new Set());
-      const [animatingCells, setAnimatingCells] = useState(new Map());
-      const [removedCells, setRemovedCells] = useState(new Set());
-      const [suckingCells, setSuckingCells] = useState(new Map());
-      const [mergedCell, setMergedCell] = useState(null);
-      const [isProcessing, setIsProcessing] = useState(false);
-      const gridRef = useRef(null);
-      const [debugInfo, setDebugInfo] = useState('');
-
-      useEffect(() => {
-        loadGame();
-      }, []);
-
-      useEffect(() => {
-        if (grid.length > 0) {
-          saveGame();
-        }
-      }, [grid, score, deprecatedValues, highestValue]);
-
-      const saveGame = () => {
-        const gameState = {
-          grid,
-          score,
-          highestValue,
-          deprecatedValues: Array.from(deprecatedValues),
-        };
-        localStorage.setItem('numberMergeGame', JSON.stringify(gameState));
-      };
-
-      const loadGame = () => {
-        const saved = localStorage.getItem('numberMergeGame');
-        if (saved) {
-          const { grid: savedGrid, score: savedScore, highestValue: savedHighest, deprecatedValues: savedDeprecated } = JSON.parse(saved);
-          setGrid(savedGrid);
-          setScore(savedScore);
-          setHighestValue(savedHighest || 1);
-          setDeprecatedValues(new Set(savedDeprecated));
-        } else {
-          initializeGrid();
-        }
-      };
-
-      const getAvailableNumbers = () => {
-        const allNumbers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216];
-        
-        const highestIndex = allNumbers.indexOf(highestValue);
-        
-        // Create a stricter ceiling: spawn values only up to 3 steps below highest
-        // This makes the game more challenging
-        const startIndex = Math.max(0, highestIndex - 5);
-        const endIndex = Math.max(startIndex + 3, highestIndex - 2); // Only 3-4 values, max 3 below highest
-        const rangeNumbers = allNumbers.slice(startIndex, endIndex);
-        
-        return rangeNumbers.filter(n => !deprecatedValues.has(n));
-      };
-
-      const getRandomNumber = () => {
-        const available = getAvailableNumbers();
-        const weights = available.map((_, i) => Math.pow(0.7, i));
-        const totalWeight = weights.reduce((a, b) => a + b, 0);
-        let random = Math.random() * totalWeight;
-        
-        for (let i = 0; i < available.length; i++) {
-          random -= weights[i];
-          if (random <= 0) return available[i];
-        }
-        return available[0];
-      };
-
-      const initializeGrid = () => {
-        const newGrid = [];
-        for (let i = 0; i < GRID_HEIGHT; i++) {
-          const row = [];
-          for (let j = 0; j < GRID_WIDTH; j++) {
-            row.push(getRandomNumber());
-          }
-          newGrid.push(row);
-        }
-        setGrid(newGrid);
-        setScore(0);
-        setHighestValue(1);
-        setDeprecatedValues(new Set());
-      };
+const getRandomNumber = () =>
+  POWERS[Math.floor(Math.random() * POWERS.length)];
 
 const formatNumber = (num) => {
   if (num < 10000) return num.toString();
-
-  if (num < 1_000_000) {
-    return `${Math.floor(num / 1000)}K`;
-  }
-
+  if (num < 1_000_000) return `${Math.floor(num / 1000)}K`;
   return `${Math.floor(num / 1_000_000)}M`;
 };
 
-      const getCellPosition = (row, col) => {
-        if (!gridRef.current) return null;
-        const cells = gridRef.current.querySelectorAll('.grid-cell');
-        const cell = cells[row * GRID_WIDTH + col];
-        if (!cell) return null;
-        const rect = cell.getBoundingClientRect();
-        return {
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2,
-        };
-      };
+const getTextColorForBackground = (hex) => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 160 ? '#111827' : '#FFFFFF';
+};
 
-      const getCellFromPointer = (x, y) => {
-        const element = document.elementFromPoint(x, y);
-        if (!element || !element.classList.contains('grid-cell')) return null;
-        
-        const cells = gridRef.current?.querySelectorAll('.grid-cell');
-        if (!cells) return null;
-        
-        const index = Array.from(cells).indexOf(element);
-        if (index === -1) return null;
-        
-        return {
-          row: Math.floor(index / GRID_WIDTH),
-          col: index % GRID_WIDTH
-        };
-      };
+/* =======================
+   GRAVITY (PURE)
+======================= */
 
-      const isAdjacent = (cell1, cell2) => {
-        const rowDiff = Math.abs(cell1.row - cell2.row);
-        const colDiff = Math.abs(cell1.col - cell2.col);
-        return rowDiff <= 1 && colDiff <= 1 && !(rowDiff === 0 && colDiff === 0);
-      };
+const applyGravity = (grid) => {
+  const newGrid = grid.map(r => [...r]);
+  const animations = new Map();
 
-      const canAddToPath = (newCell) => {
-        if (path.length === 0) return true;
-        
-        const lastCell = path[path.length - 1];
-        
-        if (path.length >= 2) {
-          const prevCell = path[path.length - 2];
-          if (prevCell.row === newCell.row && prevCell.col === newCell.col) {
-            return true;
-          }
+  for (let col = 0; col < GRID_WIDTH; col++) {
+    let writeRow = GRID_HEIGHT - 1;
+
+    for (let row = GRID_HEIGHT - 1; row >= 0; row--) {
+      if (newGrid[row][col] !== null) {
+        if (row !== writeRow) {
+          newGrid[writeRow][col] = newGrid[row][col];
+          newGrid[row][col] = null;
+          animations.set(`${writeRow}-${col}`, writeRow - row);
         }
-        
-        const alreadyInPath = path.some(cell => cell.row === newCell.row && cell.col === newCell.col);
-        if (alreadyInPath) {
-          setDebugInfo(`Already in path`);
-          return false;
-        }
-        
-        if (!isAdjacent(lastCell, newCell)) {
-          setDebugInfo(`Not adjacent`);
-          return false;
-        }
-        
-        const lastValue = grid[lastCell.row][lastCell.col];
-        const newValue = grid[newCell.row][newCell.col];
-        
-        if (path.length === 1) {
-          if (lastValue !== newValue) {
-            setDebugInfo(`First move: need ${lastValue}, got ${newValue}`);
-            return false;
-          }
-          return true;
-        }
-        
-        const doubleValue = lastValue * 2;
-        if (newValue !== lastValue && newValue !== doubleValue) {
-          setDebugInfo(`Need ${lastValue} or ${doubleValue}, got ${newValue}`);
-          return false;
-        }
-        
-        return true;
-      };
-
-      const triggerHaptic = (style = 'light') => {
-        try {
-          if ('vibrate' in navigator) {
-            const patterns = {
-              light: 10,
-              medium: 20,
-              heavy: 50
-            };
-            navigator.vibrate(patterns[style] || 10);
-          }
-        } catch (e) {
-          console.log('Haptic feedback not supported');
-        }
-      };
-
-      const handleDragStart = (row, col) => {
-        setIsDragging(true);
-        setPath([{ row, col }]);
-        setDebugInfo(`Started at ${row},${col}`);
-        triggerHaptic('medium');
-      };
-
-      const handlePointerMove = (e) => {
-        if (!isDragging) return;
-
-        const cell = getCellFromPointer(e.clientX, e.clientY);
-        if (!cell) {
-          setDebugInfo(`Moving but no cell found`);
-          return;
-        }
-
-        setDebugInfo(`Over cell ${cell.row},${cell.col}`);
-
-        const newCell = { row: cell.row, col: cell.col };
-        const lastCell = path[path.length - 1];
-        
-        if (lastCell && lastCell.row === newCell.row && lastCell.col === newCell.col) {
-          return;
-        }
-
-        if (path.length >= 2) {
-          const prevCell = path[path.length - 2];
-          if (prevCell.row === newCell.row && prevCell.col === newCell.col) {
-            setPath(path.slice(0, -1));
-            triggerHaptic('light');
-            return;
-          }
-        }
-
-        if (canAddToPath(newCell)) {
-          setPath([...path, newCell]);
-          setDebugInfo(`Added ${cell.row},${cell.col} to path`);
-          triggerHaptic('light');
-        } else {
-          setDebugInfo(`Can't add ${cell.row},${cell.col}`);
-        }
-      };
-
-      const getPathValue = () => {
-        if (path.length === 0) return 0;
-        
-        let currentValue = grid[path[0].row][path[0].col];
-        let sameValueCount = 1;
-        let doublesApplied = 0;
-        
-        for (let i = 1; i < path.length; i++) {
-          const cellValue = grid[path[i].row][path[i].col];
-          const prevValue = grid[path[i - 1].row][path[i - 1].col];
-          
-          if (cellValue > prevValue) {
-            currentValue *= 2;
-            sameValueCount = 1;
-            doublesApplied = 0;
-          }
-          else if (cellValue === prevValue) {
-            sameValueCount++;
-            
-            const shouldDouble = 
-              sameValueCount === 2 || 
-              sameValueCount === 3 || 
-              (sameValueCount > 3 && sameValueCount % 2 === 1);
-            
-            if (shouldDouble) {
-              currentValue *= 2;
-              doublesApplied++;
-            }
-          }
-        }
-        
-        return currentValue;
-      };
-
-      const handleDragEnd = async () => {
-        if (!isDragging || path.length < 2 || isProcessing) {
-          setIsDragging(false);
-          setPath([]);
-          return;
-        }
-
-        setIsProcessing(true);
-        
-        const finalValue = getPathValue();
-        const lastCell = path[path.length - 1];
-        
-        // Step 1: Sucking animation - cells move toward merged cell
-        const suckingAnimations = new Map();
-        for (let i = 0; i < path.length - 1; i++) {
-          const fromCell = path[i];
-          const toCell = lastCell;
-          const key = `${fromCell.row}-${fromCell.col}`;
-          
-          const deltaRow = toCell.row - fromCell.row;
-          const deltaCol = toCell.col - fromCell.col;
-          
-          suckingAnimations.set(key, { deltaRow, deltaCol });
-        }
-        
-        setIsDragging(false);
-        setPath([]);
-        setSuckingCells(suckingAnimations);
-        setMergedCell(`${lastCell.row}-${lastCell.col}`);
-        triggerHaptic('heavy');
-        
-        await new Promise(resolve => setTimeout(resolve, 400));
-        
-        // Step 2: Remove sucked cells
-        const cellsToRemove = new Set();
-        for (let i = 0; i < path.length - 1; i++) {
-          cellsToRemove.add(`${path[i].row}-${path[i].col}`);
-        }
-        setRemovedCells(cellsToRemove);
-        setSuckingCells(new Map());
-        
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        // Step 3: Calculate new grid state (but don't apply yet - just prep the data)
-        const newGrid = grid.map(row => [...row]);
-        newGrid[lastCell.row][lastCell.col] = finalValue;
-        
-        // Collect affected columns and their removed positions
-        const affectedColumns = new Map(); // col -> array of removed row positions
-        
-        for (let i = 0; i < path.length - 1; i++) {
-          const { row, col } = path[i];
-          if (!affectedColumns.has(col)) {
-            affectedColumns.set(col, []);
-          }
-          affectedColumns.get(col).push(row);
-        }
-        
-        // Step 4: First, drop existing cells down
-        const existingCellAnimations = new Map();
-        
-        affectedColumns.forEach((removedRows, col) => {
-          // Sort removed rows from top to bottom
-          removedRows.sort((a, b) => a - b);
-          
-          // For each removed position, shift cells down
-          removedRows.forEach((removedRow) => {
-            // Shift all cells above this position down by 1
-            for (let r = removedRow; r > 0; r--) {
-              if (!removedRows.includes(r - 1)) { // Don't move if the cell above was also removed
-                newGrid[r][col] = newGrid[r - 1][col];
-                // Mark this cell as needing drop animation
-                existingCellAnimations.set(`${r}-${col}`, 1);
-              }
-            }
-          });
-        });
-        
-        // Apply grid update with existing cells dropped
-        setGrid(newGrid);
-        setRemovedCells(new Set());
-        setAnimatingCells(existingCellAnimations);
-        
-        // Wait for existing cells to drop
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Step 5: Now add new cells at the top and animate them dropping
-        const finalGrid = newGrid.map(row => [...row]);
-        const newCellAnimations = new Map();
-        
-        affectedColumns.forEach((removedRows, col) => {
-          const numRemoved = removedRows.length;
-          // Add new random numbers at the top
-          for (let i = 0; i < numRemoved; i++) {
-            finalGrid[i][col] = getRandomNumber();
-            // These new cells drop from above the grid
-            newCellAnimations.set(`${i}-${col}`, numRemoved - i);
-          }
-        });
-        
-        setGrid(finalGrid);
-        setAnimatingCells(newCellAnimations);
-        
-        // Wait for new cells to drop
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        setScore(score + finalValue);
-        checkDeprecation(finalValue);
-        setAnimatingCells(new Map());
-        
-        if (finalValue > highestValue) {
-          setHighestValue(finalValue);
-          cleanGridBasedOnRange(finalGrid, finalValue);
-        }
-        
-        setTimeout(() => setMergedCell(null), 300);
-        setIsProcessing(false);
-      };
-
-      const cleanGridBasedOnRange = (currentGrid, newHighest) => {
-        const allNumbers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216];
-        const highestIndex = allNumbers.indexOf(newHighest);
-        const startIndex = Math.max(0, highestIndex - 5);
-        const endIndex = Math.max(startIndex + 3, highestIndex - 2);
-        const validRange = allNumbers.slice(startIndex, endIndex);
-        
-        const previousLowest = startIndex > 0 ? allNumbers[startIndex - 1] : null;
-        
-        if (previousLowest) {
-          const updatedGrid = currentGrid.map(row =>
-            row.map(cell => {
-              if (cell === previousLowest) {
-                return getRandomNumber();
-              }
-              return cell;
-            })
-          );
-          
-          setGrid(updatedGrid);
-        }
-      };
-
-      const checkDeprecation = (achievedValue) => {
-        const milestones = {
-          128: 1,
-          512: 2,
-          2048: 4,
-          8192: 8,
-          32768: 16,
-          131072: 32,
-          524288: 64,
-        };
-        
-        if (milestones[achievedValue]) {
-          const valueToDeprecate = milestones[achievedValue];
-          if (!deprecatedValues.has(valueToDeprecate)) {
-            const newDeprecated = new Set(deprecatedValues);
-            newDeprecated.add(valueToDeprecate);
-            setDeprecatedValues(newDeprecated);
-            
-            const newGrid = grid.map(row => 
-              row.map(cell => cell === valueToDeprecate ? getRandomNumber() : cell)
-            );
-            setGrid(newGrid);
-          }
-        }
-      };
-
-      const pathValue = getPathValue();
-
-      return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-200 p-4">
-          <style>
-            {`
-              @keyframes dropIn-1 {
-                from { transform: translateY(-68px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-2 {
-                from { transform: translateY(-136px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-3 {
-                from { transform: translateY(-204px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-4 {
-                from { transform: translateY(-272px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-5 {
-                from { transform: translateY(-340px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-6 {
-                from { transform: translateY(-408px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-7 {
-                from { transform: translateY(-476px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes popMerge {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.15); }
-                100% { transform: scale(1); }
-              }
-            `}
-          </style>
-          <div className="bg-white rounded-3xl p-8 shadow-2xl" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-4xl font-bold text-gray-800" style={{ fontWeight: 600 }}>Number Merge</h1>
-              <div className="bg-purple-100 px-4 py-2 rounded-full">
-                <span className="text-purple-800 text-lg font-semibold">Score: {score}</span>
-              </div>
-            </div>
-            
-            <div className="text-gray-600 text-xs mb-2 h-6">{debugInfo}</div>
-            
-            <div className="mb-6 text-center" style={{ height: '80px' }}>
-              {path.length > 0 && (
-                <>
-                  <div className="text-gray-600 text-sm mb-2 font-medium">Next Value</div>
-                  <div 
-                    className="inline-block px-8 py-3 rounded-2xl text-3xl font-bold"
-                    style={{ 
-                      backgroundColor: COLORS[pathValue] || '#E0E0E0', 
-                      color: '#FFFFFF',
-                      textShadow: '0 1px 2px rgba(0,0,0,0.45)'
-                    }}
-                  >
-                    {formatNumber(pathValue)}
-                  </div>
-                </>
-              )}
-            </div>
-            
-            <div 
-              ref={gridRef}
-              className="grid gap-3 relative select-none bg-gray-900 p-4 rounded-3xl"
-              style={{ gridTemplateColumns: `repeat(${GRID_WIDTH}, 1fr)`, touchAction: 'none' }}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handleDragEnd}
-              onPointerCancel={handleDragEnd}
-            >
-              {grid.map((row, rowIndex) =>
-                row.map((value, colIndex) => {
-                  const cellKey = `${rowIndex}-${colIndex}`;
-                  const isInPath = path.some(p => p.row === rowIndex && p.col === colIndex);
-                  const dropDistance = animatingCells.get(cellKey);
-                  const isRemoved = removedCells.has(cellKey);
-                  const isMerged = mergedCell === cellKey;
-                  const suckDirection = suckingCells.get(cellKey);
-                  
-                  let transform = 'translateY(0)';
-                  if (isInPath) {
-                    transform = 'scale(1.08)';
-                  } else if (suckDirection) {
-                    const moveX = suckDirection.deltaCol * 68;
-                    const moveY = suckDirection.deltaRow * 68;
-                    transform = `translate(${moveX}px, ${moveY}px) scale(0.5)`;
-                  } else if (isRemoved) {
-                    transform = 'scale(0)';
-                  }
-                  
-                  return (
-                    <div
-                      key={cellKey}
-                      className="grid-cell w-16 h-16 flex items-center justify-center rounded-2xl font-bold text-xl cursor-pointer"
-                      style={{
-                        backgroundColor: COLORS[value] || '#E0E0E0',
-                        color: getTextColorForBackground(COLORS[value]),
-textShadow: getTextColorForBackground(COLORS[value]) === '#FFFFFF'
-  ? '0 1px 2px rgba(0,0,0,0.45)'
-  : 'none',
-                        transform: transform,
-                        boxShadow: isInPath 
-                          ? '0 8px 24px rgba(0,0,0,0.2), 0 0 0 3px rgba(66, 153, 225, 0.5)' 
-                          : isMerged
-                            ? '0 8px 24px rgba(0,0,0,0.25)'
-                            : '0 2px 8px rgba(0,0,0,0.1)',
-                        touchAction: 'none',
-                        opacity: isRemoved ? 0 : suckDirection ? 0.7 : 1,
-                        transition: suckDirection
-                          ? 'all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55)'
-                          : isRemoved 
-                            ? 'all 0.3s ease-out' 
-                            : dropDistance
-                              ? 'transform 0.8s cubic-bezier(0.34, 1.2, 0.64, 1)' 
-                              : 'all 0.2s ease',
-                        ...(dropDistance && {
-                          animation: `dropIn-${dropDistance} 0.8s cubic-bezier(0.34, 1.2, 0.64, 1)`,
-                          animationFillMode: 'backwards'
-                        }),
-                        ...(isMerged && !suckDirection && {
-                          animation: 'popMerge 0.4s ease-out'
-                        })
-                      }}
-                      onPointerDown={() => !isProcessing && handleDragStart(rowIndex, colIndex)}
-                    >
-                      {formatNumber(value)}
-                    </div>
-                  );
-                })
-              )}
-              
-              {path.length > 1 && (
-                <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%' }}>
-                  {path.slice(0, -1).map((cell, index) => {
-                    const nextCell = path[index + 1];
-                    const pos1 = getCellPosition(cell.row, cell.col);
-                    const pos2 = getCellPosition(nextCell.row, nextCell.col);
-                    if (!pos1 || !pos2) return null;
-                    
-                    const containerRect = gridRef.current?.getBoundingClientRect();
-                    if (!containerRect) return null;
-                    
-                    const cx1 = pos1.x - containerRect.left;
-                    const cy1 = pos1.y - containerRect.top;
-                    const cx2 = pos2.x - containerRect.left;
-                    const cy2 = pos2.y - containerRect.top;
-                    
-                    // Direction vector
-const dx = cx2 - cx1;
-const dy = cy2 - cy1;
-const length = Math.sqrt(dx * dx + dy * dy);
-
-// Normalize
-const ux = dx / length;
-const uy = dy / length;
-
-// Offset start & end so line touches tile edge
-const x1 = cx1 + ux * CELL_RADIUS;
-const y1 = cy1 + uy * CELL_RADIUS;
-const x2 = cx2 - ux * CELL_RADIUS;
-const y2 = cy2 - uy * CELL_RADIUS;
-
-                    const nextValue = grid[nextCell.row][nextCell.col];
-                    const lineColor = COLORS[nextValue] || '#4299E1';
-                    
-                    return (
-  <line
-    key={index}
-    x1={x1}
-    y1={y1}
-    x2={x2}
-    y2={y2}
-    stroke={lineColor}
-    strokeWidth="8"
-    strokeLinecap="round"
-    opacity="0.9"
-  />
-);
-                  })}
-                </svg>
-              )}
-            </div>
-            
-            <button
-              onClick={initializeGrid}
-              className="mt-8 w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold py-4 px-6 rounded-2xl transition-all shadow-lg"
-            >
-              New Game
-            </button>
-          </div>
-        </div>
-      );
-    };
-
-    ReactDOM.render(<NumberMergeGame />, document.getElementById('root'));
-  </script>
-
-  <!-- Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('data:text/javascript,self.addEventListener("install",%20()%20=>%20self.skipWaiting());self.addEventListener("activate",%20()%20=>%20self.clients.claim());')
-          .then(() => console.log('Service Worker registered'))
-          .catch(err => console.log('Service Worker registration failed:', err));
-      });
+        writeRow--;
+      }
     }
-  </script>
+  }
+
+  return { newGrid, animations };
+};
+
+/* =======================
+   COMPONENT
+======================= */
+
+const NumberMergeGame = () => {
+  const [grid, setGrid] = useState([]);
+  const [path, setPath] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [animatingCells, setAnimatingCells] = useState(new Map());
+  const [removedCells, setRemovedCells] = useState(new Set());
+  const [suckingCells, setSuckingCells] = useState(new Map());
+  const [mergedCell, setMergedCell] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const gridRef = useRef(null);
+
+  useEffect(() => initializeGrid(), []);
+
+  const initializeGrid = () => {
+    const g = Array.from({ length: GRID_HEIGHT }, () =>
+      Array.from({ length: GRID_WIDTH }, getRandomNumber)
+    );
+    setGrid(g);
+  };
+
+  const getCellPosition = (row, col) => {
+    const cells = gridRef.current.querySelectorAll('.grid-cell');
+    const cell = cells[row * GRID_WIDTH + col];
+    const rect = cell.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  };
+
+  const handleDragStart = (row, col) => {
+    if (isProcessing) return;
+    setIsDragging(true);
+    setPath([{ row, col }]);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el?.classList.contains('grid-cell')) return;
+
+    const cells = [...gridRef.current.querySelectorAll('.grid-cell')];
+    const idx = cells.indexOf(el);
+    const row = Math.floor(idx / GRID_WIDTH);
+    const col = idx % GRID_WIDTH;
+
+    const last = path[path.length - 1];
+    if (last?.row === row && last.col === col) return;
+
+    setPath([...path, { row, col }]);
+  };
+
+  const getPathValue = () =>
+    path.reduce((v) => v * 2, grid[path[0].row][path[0].col]);
+
+  const handleDragEnd = async () => {
+    if (path.length < 2) {
+      setPath([]);
+      setIsDragging(false);
+      return;
+    }
+
+    setIsProcessing(true);
+    const finalValue = getPathValue();
+    const lastCell = path[path.length - 1];
+
+    /* suction */
+    const suck = new Map();
+    path.slice(0, -1).forEach(c =>
+      suck.set(`${c.row}-${c.col}`, {
+        deltaRow: lastCell.row - c.row,
+        deltaCol: lastCell.col - c.col
+      })
+    );
+    setSuckingCells(suck);
+    setMergedCell(`${lastCell.row}-${lastCell.col}`);
+    await new Promise(r => setTimeout(r, 400));
+
+    /* logical grid */
+    const logical = grid.map(r => [...r]);
+    path.slice(0, -1).forEach(c => logical[c.row][c.col] = null);
+    logical[lastCell.row][lastCell.col] = finalValue;
+
+    /* gravity */
+    const { newGrid, animations } = applyGravity(logical);
+
+    /* spawn */
+    for (let col = 0; col < GRID_WIDTH; col++) {
+      for (let row = 0; row < GRID_HEIGHT; row++) {
+        if (newGrid[row][col] === null) {
+          newGrid[row][col] = getRandomNumber();
+          animations.set(`${row}-${col}`, GRID_HEIGHT);
+        }
+      }
+    }
+
+    setGrid(newGrid);
+    setAnimatingCells(animations);
+
+    await new Promise(r => setTimeout(r, 800));
+
+    setPath([]);
+    setSuckingCells(new Map());
+    setMergedCell(null);
+    setAnimatingCells(new Map());
+    setIsDragging(false);
+    setIsProcessing(false);
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-200 p-4">
+      <div className="bg-white rounded-3xl p-8 shadow-2xl">
+        <h1 className="text-3xl font-bold mb-4">Number Merge</h1>
+
+        <div
+          ref={gridRef}
+          className="grid gap-3 relative bg-gray-900 p-4 rounded-3xl"
+          style={{ gridTemplateColumns: `repeat(${GRID_WIDTH}, 1fr)` }}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handleDragEnd}
+        >
+          {grid.map((row, r) =>
+            row.map((value, c) => {
+              const key = `${r}-${c}`;
+              const suck = suckingCells.get(key);
+              const drop = animatingCells.get(key);
+
+              let transform = 'translateY(0)';
+              if (suck) {
+                transform = `translate(${suck.deltaCol * 68}px, ${suck.deltaRow * 68}px) scale(0.5)`;
+              }
+
+              return (
+                <div
+                  key={key}
+                  className="grid-cell w-16 h-16 rounded-2xl flex items-center justify-center font-bold cursor-pointer"
+                  style={{
+                    backgroundColor: COLORS[value],
+                    color: getTextColorForBackground(COLORS[value]),
+                    transform,
+                    transition: 'all 0.4s ease',
+                    ...(drop && { animation: `dropIn-${drop} 0.8s ease` })
+                  }}
+                  onPointerDown={() => handleDragStart(r, c)}
+                >
+                  {formatNumber(value)}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <button
+          onClick={initializeGrid}
+          className="mt-6 w-full bg-purple-600 text-white py-3 rounded-xl font-semibold"
+        >
+          New Game
+        </button>
+      </div>
+    </div>
+  );
+};
+
+ReactDOM.render(<NumberMergeGame />, document.getElementById('root'));
+</script>
 </body>
 </html>
