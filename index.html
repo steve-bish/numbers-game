@@ -54,6 +54,9 @@
 
     const GRID_WIDTH = 5;
     const GRID_HEIGHT = 7;
+    
+    const CELL_SIZE = 64;
+    const CELL_RADIUS = CELL_SIZE / 2;
 
     const COLORS = {
   1: '#4DD0E1',      // cyan
@@ -666,10 +669,26 @@ const formatNumber = (num) => {
                     const containerRect = gridRef.current?.getBoundingClientRect();
                     if (!containerRect) return null;
                     
-                    const x1 = pos1.x - containerRect.left;
-                    const y1 = pos1.y - containerRect.top;
-                    const x2 = pos2.x - containerRect.left;
-                    const y2 = pos2.y - containerRect.top;
+                    const cx1 = pos1.x - containerRect.left;
+                    const cy1 = pos1.y - containerRect.top;
+                    const cx2 = pos2.x - containerRect.left;
+                    const cy2 = pos2.y - containerRect.top;
+                    
+                    // Direction vector
+const dx = cx2 - cx1;
+const dy = cy2 - cy1;
+const length = Math.sqrt(dx * dx + dy * dy);
+
+// Normalize
+const ux = dx / length;
+const uy = dy / length;
+
+// Offset start & end so line touches tile edge
+const x1 = cx1 + ux * CELL_RADIUS;
+const y1 = cy1 + uy * CELL_RADIUS;
+const x2 = cx2 - ux * CELL_RADIUS;
+const y2 = cy2 - uy * CELL_RADIUS;
+
                     const nextValue = grid[nextCell.row][nextCell.col];
                     const lineColor = COLORS[nextValue] || '#4299E1';
                     
