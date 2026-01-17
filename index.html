@@ -83,6 +83,20 @@
   16777216: '#7986CB',
 };
 
+const getTextColorForBackground = (hex) => {
+  if (!hex) return '#111';
+
+  const cleanHex = hex.replace('#', '');
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+
+  // Perceived brightness (WCAG-style)
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+  return brightness > 160 ? '#111827' : '#FFFFFF';
+};
+
     const NumberMergeGame = () => {
       const [grid, setGrid] = useState([]);
       const [path, setPath] = useState([]);
@@ -623,7 +637,10 @@ const formatNumber = (num) => {
                       className="grid-cell w-16 h-16 flex items-center justify-center rounded-2xl font-bold text-xl cursor-pointer"
                       style={{
                         backgroundColor: COLORS[value] || '#E0E0E0',
-                        color: '#333',
+                        color: getTextColorForBackground(COLORS[value]),
+textShadow: getTextColorForBackground(COLORS[value]) === '#FFFFFF'
+  ? '0 1px 2px rgba(0,0,0,0.45)'
+  : 'none',
                         transform: transform,
                         boxShadow: isInPath 
                           ? '0 8px 24px rgba(0,0,0,0.2), 0 0 0 3px rgba(66, 153, 225, 0.5)' 
