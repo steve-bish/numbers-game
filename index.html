@@ -56,32 +56,32 @@
     const GRID_HEIGHT = 7;
 
     const COLORS = {
-      1: '#FFE0E9',
-      2: '#FFD4E5',
-      4: '#FFC4DD',
-      8: '#FFB4D5',
-      16: '#FFA4CD',
-      32: '#E8B4F0',
-      64: '#D4A5F3',
-      128: '#C096F5',
-      256: '#AC87F7',
-      512: '#9F7AEA',
-      1024: '#8B6AD1',
-      2048: '#7C5AC0',
-      4096: '#A8E6CF',
-      8192: '#94D9B3',
-      16384: '#80CCB0',
-      32768: '#A8D8EA',
-      65536: '#94CEEA',
-      131072: '#80C4EA',
-      262144: '#B4A7D6',
-      524288: '#CAB8E8',
-      1048576: '#E0C9F5',
-      2097152: '#FFE0E9',
-      4194304: '#FFD4E5',
-      8388608: '#FFC4DD',
-      16777216: '#FFB4D5',
-    };
+  1: '#4DD0E1',      // cyan
+  2: '#9575CD',      // purple
+  4: '#81C784',      // green
+  8: '#FFD54F',      // yellow
+  16: '#FF8A65',     // orange
+  32: '#64B5F6',     // blue
+  64: '#E57373',     // red
+  128: '#4DB6AC',    // teal
+  256: '#BA68C8',    // violet
+  512: '#AED581',    // lime
+  1024: '#FFB74D',   // amber
+  2048: '#7986CB',   // indigo
+  4096: '#F06292',   // pink
+  8192: '#4FC3F7',   // sky blue
+  16384: '#81C784',  // green (cycled, but distinct from neighbors)
+  32768: '#FF8A65',
+  65536: '#9575CD',
+  131072: '#4DB6AC',
+  262144: '#FFD54F',
+  524288: '#E57373',
+  1048576: '#64B5F6',
+  2097152: '#BA68C8',
+  4194304: '#AED581',
+  8388608: '#FFB74D',
+  16777216: '#7986CB',
+};
 
     const NumberMergeGame = () => {
       const [grid, setGrid] = useState([]);
@@ -579,8 +579,8 @@ const formatNumber = (num) => {
                     className="inline-block px-8 py-3 rounded-2xl text-3xl font-bold"
                     style={{ 
                       backgroundColor: COLORS[pathValue] || '#E0E0E0', 
-                      color: '#333',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                      color: '#FFFFFF',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.45)'
                     }}
                   >
                     {formatNumber(pathValue)}
