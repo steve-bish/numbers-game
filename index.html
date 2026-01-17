@@ -670,20 +670,22 @@ const formatNumber = (num) => {
                     const y1 = pos1.y - containerRect.top;
                     const x2 = pos2.x - containerRect.left;
                     const y2 = pos2.y - containerRect.top;
+                    const nextValue = grid[nextCell.row][nextCell.col];
+                    const lineColor = COLORS[nextValue] || '#4299E1';
                     
                     return (
-                      <line
-                        key={index}
-                        x1={x1}
-                        y1={y1}
-                        x2={x2}
-                        y2={y2}
-                        stroke="#4299E1"
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                        opacity="0.9"
-                      />
-                    );
+  <line
+    key={index}
+    x1={x1}
+    y1={y1}
+    x2={x2}
+    y2={y2}
+    stroke={lineColor}
+    strokeWidth="8"
+    strokeLinecap="round"
+    opacity="0.9"
+  />
+);
                   })}
                 </svg>
               )}
