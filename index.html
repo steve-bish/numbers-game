@@ -176,15 +176,11 @@
         const formatNumber = (num) => {
   if (num < 10000) return num.toString();
 
-  // Find largest power of 2 less than or equal to num
-  const power = Math.floor(Math.log2(num));
-  const rounded = 2 ** power;
-
-  if (rounded >= 1_000_000) {
-    return `${rounded / 1_000_000}M`;
+  if (num < 1_000_000) {
+    return `${num / 1000}K`;
   }
 
-  return `${rounded / 1_000}K`;
+  return `${num / 1_000_000}M`;
 };
 
       const getCellPosition = (row, col) => {
@@ -565,8 +561,8 @@
               }
             `}
           </style>
-          <div className="bg-white rounded-3xl p-8 shadow-2xl" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
-            <div className="flex justify-between items-center mb-6">
+          <div className="bg-white rounded-3xl p-6 shadow-2xl" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
+            <div className="flex justify-between items-center mb-3">
               <h1 className="text-4xl font-bold text-gray-800" style={{ fontWeight: 600 }}>Number Merge</h1>
               <div className="bg-purple-100 px-4 py-2 rounded-full">
                 <span className="text-purple-800 text-lg font-semibold">Score: {score}</span>
@@ -575,7 +571,7 @@
             
             <div className="text-gray-600 text-xs mb-2 h-6">{debugInfo}</div>
             
-            <div className="mb-6 text-center" style={{ height: '80px' }}>
+            <div className="mb-3 text-center" style={{ height: '56px' }}>
               {path.length > 0 && (
                 <>
                   <div className="text-gray-600 text-sm mb-2 font-medium">Next Value</div>
@@ -596,8 +592,10 @@
             <div 
               ref={gridRef}
               className="grid gap-3 relative select-none bg-gray-900 p-4 rounded-3xl"
-              style={{ gridTemplateColumns: `repeat(${GRID_WIDTH}, 1fr)`, touchAction: 'none' }}
-              onPointerMove={handlePointerMove}
+              style={{
+                gridTemplateColumns: 'repeat(${GRID_WIDTH}, minmax(0, 1fr))',
+                maxWidth: '100%',}}
+                onPointerMove={handlePointerMove}
               onPointerUp={handleDragEnd}
               onPointerCancel={handleDragEnd}
             >
@@ -624,7 +622,7 @@
                   return (
                     <div
                       key={cellKey}
-                      className="grid-cell w-16 h-16 flex items-center justify-center rounded-2xl font-bold text-xl cursor-pointer"
+                      className="grid-cell aspect-square w-full flex items-center justify-center rounded-2xl font-bold text-xl cursor-pointer"
                       style={{
                         backgroundColor: COLORS[value] || '#E0E0E0',
                         color: '#333',
@@ -675,19 +673,23 @@
                     const x2 = pos2.x - containerRect.left;
                     const y2 = pos2.y - containerRect.top;
                     
-                    return (
-                      <line
-                        key={index}
-                        x1={x1}
-                        y1={y1}
-                        x2={x2}
-                        y2={y2}
-                        stroke="#4299E1"
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                        opacity="0.9"
-                      />
-                    );
+                    const nextValue = grid[nextCell.row][nextCell.col];
+const lineColor = COLORS[nextValue] || '#4299E1';
+
+return (
+  <line
+    key={index}
+    x1={x1}
+    y1={y1}
+    x2={x2}
+    y2={y2}
+    stroke={lineColor}
+    strokeWidth="8"
+    strokeLinecap="round"
+    opacity="0.9"
+  />
+);
+                    
                   })}
                 </svg>
               )}
