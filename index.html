@@ -173,15 +173,19 @@
         setDeprecatedValues(new Set());
       };
 
-      const formatNumber = (num) => {
-        if (num >= 1000000) {
-          return `${Math.round(num / 1000000)}M`;
-        }
-        if (num >= 10000) {
-          return `${Math.round(num / 10000)}K`;
-        }
-        return num;
-      };
+        const formatNumber = (num) => {
+  if (num < 10000) return num.toString();
+
+  // Find largest power of 2 less than or equal to num
+  const power = Math.floor(Math.log2(num));
+  const rounded = 2 ** power;
+
+  if (rounded >= 1_000_000) {
+    return `${rounded / 1_000_000}M`;
+  }
+
+  return `${rounded / 1_000}K`;
+};
 
       const getCellPosition = (row, col) => {
         if (!gridRef.current) return null;
