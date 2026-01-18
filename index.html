@@ -55,7 +55,10 @@
     const GRID_WIDTH = 5;
     const GRID_HEIGHT = 7;
     
-    const CELL_SIZE = 64;
+    const CELL_SIZE = Math.min(
+  64,
+  Math.floor((window.innerHeight - 260) / GRID_HEIGHT)
+);
     const CELL_RADIUS = CELL_SIZE / 2;
 
     const COLORS = {
@@ -540,7 +543,7 @@ const formatNumber = (num) => {
       const pathValue = getPathValue();
 
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-200 p-4">
+        <div className="flex flex-col items-center bg-gray-200 p-4 h-screen overflow-hidden">
           <style>
             {`
               @keyframes dropIn-1 {
@@ -578,7 +581,9 @@ const formatNumber = (num) => {
               }
             `}
           </style>
-          <div className="bg-white rounded-3xl p-8 shadow-2xl" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
+          <div
+  className="bg-white rounded-3xl p-6 shadow-2xl flex flex-col"
+  style={{ maxHeight: '100%', width: '100%', maxWidth: 420, boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-4xl font-bold text-gray-800" style={{ fontWeight: 600 }}>Number Merge</h1>
               <div className="bg-purple-100 px-4 py-2 rounded-full">
@@ -606,6 +611,7 @@ const formatNumber = (num) => {
               )}
             </div>
             
+            <div className="flex-1 flex flex-col justify-center">
             <div 
               ref={gridRef}
               className="grid gap-3 relative select-none bg-gray-900 p-4 rounded-3xl"
@@ -637,8 +643,11 @@ const formatNumber = (num) => {
                   return (
                     <div
                       key={cellKey}
-                      className="grid-cell w-16 h-16 flex items-center justify-center rounded-2xl font-bold text-xl cursor-pointer"
-                      style={{
+                      className="grid-cell flex items-center justify-center rounded-2xl font-bold cursor-pointer"
+style={{
+  width: CELL_SIZE,
+  height: CELL_SIZE,
+  fontSize: CELL_SIZE * 0.4,
                         backgroundColor: COLORS[value] || '#E0E0E0',
                         color: getTextColorForBackground(COLORS[value]),
 textShadow: getTextColorForBackground(COLORS[value]) === '#FFFFFF'
@@ -726,6 +735,7 @@ const y2 = cy2 - uy * CELL_RADIUS;
                   })}
                 </svg>
               )}
+            </div>
             </div>
             
             <button
