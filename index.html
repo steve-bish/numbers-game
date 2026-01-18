@@ -100,6 +100,27 @@ const getTextColorForBackground = (hex) => {
   return brightness > 160 ? '#111827' : '#FFFFFF';
 };
 
+const ALL_VALUES = [
+  1, 2, 4, 8, 16, 32, 64, 128, 256, 512,
+  1024, 2048, 4096, 8192, 16384, 32768,
+  65536, 131072, 262144, 524288, 1048576,
+  2097152, 4194304, 8388608, 16777216
+];
+
+const getMinMaxFromGrid = (grid) => {
+  let min = Infinity;
+  let max = 0;
+
+  for (const row of grid) {
+    for (const val of row) {
+      min = Math.min(min, val);
+      max = Math.max(max, val);
+    }
+  }
+
+  return { min, max };
+};
+
     const NumberMergeGame = () => {
       const [grid, setGrid] = useState([]);
       const [path, setPath] = useState([]);
@@ -148,39 +169,51 @@ const getTextColorForBackground = (hex) => {
         }
       };
 
-      const getAvailableNumbers = () => {
-        const allNumbers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216];
-        
-        const highestIndex = allNumbers.indexOf(highestValue);
-        
-        // Create a stricter ceiling: spawn values only up to 3 steps below highest
-        // This makes the game more challenging
-        const startIndex = Math.max(0, highestIndex - 5);
-        const endIndex = Math.max(startIndex + 3, highestIndex - 2); // Only 3-4 values, max 3 below highest
-        const rangeNumbers = allNumbers.slice(startIndex, endIndex);
-        
-        return rangeNumbers.filter(n => !deprecatedValues.has(n));
-      };
+      const getAvailableNumbers = (grid) => {
+  if (!grid || grid.length === 0) return [1];
 
-      const getRandomNumber = () => {
-        const available = getAvailableNumbers();
-        const weights = available.map((_, i) => Math.pow(0.7, i));
-        const totalWeight = weights.reduce((a, b) => a + b, 0);
-        let random = Math.random() * totalWeight;
-        
-        for (let i = 0; i < available.length; i++) {
-          random -= weights[i];
-          if (random <= 0) return available[i];
-        }
-        return available[0];
-      };
+  const { min, max } = getMinMaxFromGrid(grid);
+
+  // Allow board clearing
+  const minSpawn = min;
+
+  // Keep difficulty high: far below highest value
+  const maxSpawn = Math.max(min, Math.floor(max / 8));
+
+  const minIndex = ALL_VALUES.indexOf(minSpawn);
+  const maxIndex = ALL_VALUES.indexOf(maxSpawn);
+
+  const start = Math.max(0, minIndex);
+  const end = Math.max(start + 1, maxIndex + 1);
+
+  return ALL_VALUES.slice(start, end);
+};
+
+      const getRandomNumber = (currentGrid = grid) => {
+  const available = getAvailableNumbers(currentGrid);
+
+  // Heavily weight lower values
+  const weights = available.map((_, i) =>
+    Math.pow(0.65, i)
+  );
+
+  const total = weights.reduce((a, b) => a + b, 0);
+  let roll = Math.random() * total;
+
+  for (let i = 0; i < available.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return available[i];
+  }
+
+  return available[0];
+};
 
       const initializeGrid = () => {
         const newGrid = [];
         for (let i = 0; i < GRID_HEIGHT; i++) {
           const row = [];
           for (let j = 0; j < GRID_WIDTH; j++) {
-            row.push(getRandomNumber());
+            row.push(getRandomNumber(newGrid));
           }
           newGrid.push(row);
         }
@@ -463,7 +496,7 @@ const formatNumber = (num) => {
           const numRemoved = removedRows.length;
           // Add new random numbers at the top
           for (let i = 0; i < numRemoved; i++) {
-            finalGrid[i][col] = getRandomNumber();
+            finalGrid[i][col] = getRandomNumber(finalGrid);
             // These new cells drop from above the grid
             newCellAnimations.set(`${i}-${col}`, numRemoved - i);
           }
