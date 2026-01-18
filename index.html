@@ -400,7 +400,7 @@ const formatNumber = (num) => {
         setMergedCell(`${lastCell.row}-${lastCell.col}`);
         triggerHaptic('heavy');
         
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise(resolve => setTimeout(resolve, 180));
         
         // Step 2: Remove sucked cells
         const cellsToRemove = new Set();
@@ -453,7 +453,7 @@ const formatNumber = (num) => {
         setAnimatingCells(existingCellAnimations);
         
         // Wait for existing cells to drop
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await new Promise(resolve => setTimeout(resolve, 350));
         
         // Step 5: Now add new cells at the top and animate them dropping
         const finalGrid = newGrid.map(row => [...row]);
@@ -473,7 +473,7 @@ const formatNumber = (num) => {
         setAnimatingCells(newCellAnimations);
         
         // Wait for new cells to drop
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await new Promise(resolve => setTimeout(resolve, 350));
         
         setScore(score + finalValue);
         checkDeprecation(finalValue);
@@ -653,15 +653,16 @@ textShadow: getTextColorForBackground(COLORS[value]) === '#FFFFFF'
                         touchAction: 'none',
                         opacity: isRemoved ? 0 : suckDirection ? 0.7 : 1,
                         transition: suckDirection
-                          ? 'all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55)'
+                          ? 'all 0.18s cubic-bezier(0.25, 1, 0.5, 1)'
                           : isRemoved 
                             ? 'all 0.3s ease-out' 
                             : dropDistance
-                              ? 'transform 0.8s cubic-bezier(0.34, 1.2, 0.64, 1)' 
+                              ? 'transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1)' 
                               : 'all 0.2s ease',
                         ...(dropDistance && {
-                          animation: `dropIn-${dropDistance} 0.8s cubic-bezier(0.34, 1.2, 0.64, 1)`,
-                          animationFillMode: 'backwards'
+                          animation: `dropIn-${dropDistance} 0.35s cubic-bezier(0.22, 0.61, 0.36, 1)`,
+                          animationFillMode: 'backwards',
+                          animationDelay: '${(dropDistance - 1) * 0.04}s'
                         }),
                         ...(isMerged && !suckDirection && {
                           animation: 'popMerge 0.4s ease-out'
