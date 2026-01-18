@@ -369,124 +369,124 @@ const formatNumber = (num) => {
         return currentValue;
       };
 
-      const handleDragEnd = async () => {
-        if (!isDragging || path.length < 2 || isProcessing) {
-          setIsDragging(false);
-          setPath([]);
-          return;
-        }
+const handleDragEnd = async () => {
+  if (!isDragging || path.length < 2 || isProcessing) {
+    setIsDragging(false);
+    setPath([]);
+    return;
+  }
 
-        setIsProcessing(true);
-        
-        const finalValue = getPathValue();
-        const lastCell = path[path.length - 1];
-        
-        // Step 1: Sucking animation - cells move toward merged cell
-        const suckingAnimations = new Map();
-        for (let i = 0; i < path.length - 1; i++) {
-          const fromCell = path[i];
-          const toCell = lastCell;
-          const key = `${fromCell.row}-${fromCell.col}`;
-          
-          const deltaRow = toCell.row - fromCell.row;
-          const deltaCol = toCell.col - fromCell.col;
-          
-          suckingAnimations.set(key, { deltaRow, deltaCol });
-        }
-        
-        setIsDragging(false);
-        setPath([]);
-        setSuckingCells(suckingAnimations);
-        setMergedCell(`${lastCell.row}-${lastCell.col}`);
-        triggerHaptic('heavy');
-        
-        await new Promise(resolve => setTimeout(resolve, 180));
-        
-        // Step 2: Remove sucked cells
-        const cellsToRemove = new Set();
-        for (let i = 0; i < path.length - 1; i++) {
-          cellsToRemove.add(`${path[i].row}-${path[i].col}`);
-        }
-        setRemovedCells(cellsToRemove);
-        setSuckingCells(new Map());
-        
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        // Step 3: Calculate new grid state (but don't apply yet - just prep the data)
-        const newGrid = grid.map(row => [...row]);
-        newGrid[lastCell.row][lastCell.col] = finalValue;
-        
-        // Collect affected columns and their removed positions
-        const affectedColumns = new Map(); // col -> array of removed row positions
-        
-        for (let i = 0; i < path.length - 1; i++) {
-          const { row, col } = path[i];
-          if (!affectedColumns.has(col)) {
-            affectedColumns.set(col, []);
+  setIsProcessing(true);
+  const lastCell = path[path.length - 1];
+  const finalValue = getPathValue();
+
+  setIsDragging(false);
+  setPath([]);
+
+  // ------------------------------
+  // 1️⃣ Suction animation
+  // ------------------------------
+  const suckingAnimations = new Map();
+  for (let i = 0; i < path.length - 1; i++) {
+    const fromCell = path[i];
+    const deltaRow = lastCell.row - fromCell.row;
+    const deltaCol = lastCell.col - fromCell.col;
+    suckingAnimations.set(`${fromCell.row}-${fromCell.col}`, { deltaRow, deltaCol });
+  }
+
+  setSuckingCells(suckingAnimations);
+  setMergedCell(`${lastCell.row}-${lastCell.col}`);
+  triggerHaptic('heavy');
+
+  // Wait for suction to complete
+  await new Promise(resolve => setTimeout(resolve, 180));
+
+  // Remove path tiles (except the merge cell)
+  const cellsToRemove = new Set(path.slice(0, -1).map(c => `${c.row}-${c.col}`));
+  setRemovedCells(cellsToRemove);
+  setSuckingCells(new Map());
+
+  // Wait for removal animation
+  await new Promise(resolve => setTimeout(resolve, 150));
+
+  // Update merge cell value
+  setGrid(prev => {
+    const newGrid = prev.map(row => [...row]);
+    newGrid[lastCell.row][lastCell.col] = finalValue;
+    return newGrid;
+  });
+
+  // ------------------------------
+  // 2️⃣ Existing tiles drop
+  // ------------------------------
+  const dropAnimations = new Map();
+  const newGrid = grid.map(row => [...row]); // copy grid
+
+  // For each column affected by the merge
+  const affectedColumns = new Set(path.map(c => c.col));
+  affectedColumns.forEach(col => {
+    // Scan from bottom up
+    for (let row = GRID_HEIGHT - 1; row >= 0; row--) {
+      if (newGrid[row][col] === 0) {
+        // Find first non-empty above
+        for (let above = row - 1; above >= 0; above--) {
+          if (newGrid[above][col] !== 0) {
+            newGrid[row][col] = newGrid[above][col];
+            newGrid[above][col] = 0;
+            dropAnimations.set(`${above}-${col}`, row - above);
+            break;
           }
-          affectedColumns.get(col).push(row);
         }
-        
-        // Step 4: First, drop existing cells down
-        const existingCellAnimations = new Map();
-        
-        affectedColumns.forEach((removedRows, col) => {
-          // Sort removed rows from top to bottom
-          removedRows.sort((a, b) => a - b);
-          
-          // For each removed position, shift cells down
-          removedRows.forEach((removedRow) => {
-            // Shift all cells above this position down by 1
-            for (let r = removedRow; r > 0; r--) {
-              if (!removedRows.includes(r - 1)) { // Don't move if the cell above was also removed
-                newGrid[r][col] = newGrid[r - 1][col];
-                // Mark this cell as needing drop animation
-                existingCellAnimations.set(`${r}-${col}`, 1);
-              }
-            }
-          });
-        });
-        
-        // Apply grid update with existing cells dropped
-        setGrid(newGrid);
-        setRemovedCells(new Set());
-        setAnimatingCells(existingCellAnimations);
-        
-        // Wait for existing cells to drop
-        await new Promise(resolve => setTimeout(resolve, 350));
-        
-        // Step 5: Now add new cells at the top and animate them dropping
-        const finalGrid = newGrid.map(row => [...row]);
-        const newCellAnimations = new Map();
-        
-        affectedColumns.forEach((removedRows, col) => {
-          const numRemoved = removedRows.length;
-          // Add new random numbers at the top
-          for (let i = 0; i < numRemoved; i++) {
-            finalGrid[i][col] = getRandomNumber();
-            // These new cells drop from above the grid
-            newCellAnimations.set(`${i}-${col}`, numRemoved - i);
-          }
-        });
-        
-        setGrid(finalGrid);
-        setAnimatingCells(newCellAnimations);
-        
-        // Wait for new cells to drop
-        await new Promise(resolve => setTimeout(resolve, 350));
-        
-        setScore(score + finalValue);
-        checkDeprecation(finalValue);
-        setAnimatingCells(new Map());
-        
-        if (finalValue > highestValue) {
-          setHighestValue(finalValue);
-          cleanGridBasedOnRange(finalGrid, finalValue);
-        }
-        
-        setTimeout(() => setMergedCell(null), 300);
-        setIsProcessing(false);
-      };
+      }
+    }
+  });
+
+  setGrid(newGrid);
+  setAnimatingCells(dropAnimations);
+
+  // Wait for existing tiles to finish dropping
+  await new Promise(resolve => setTimeout(resolve, 350));
+
+  setAnimatingCells(new Map());
+
+  // ------------------------------
+  // 3️⃣ New tiles drop
+  // ------------------------------
+  const finalGrid = newGrid.map(row => [...row]);
+  const newTileAnimations = new Map();
+
+  affectedColumns.forEach(col => {
+    // Count empty cells at top
+    let emptyCount = 0;
+    for (let row = 0; row < GRID_HEIGHT; row++) {
+      if (finalGrid[row][col] === 0) emptyCount++;
+    }
+
+    for (let i = 0; i < emptyCount; i++) {
+      finalGrid[i][col] = getColumnSpawnValue(finalGrid, col);
+      newTileAnimations.set(`${i}-${col}`, emptyCount - i);
+    }
+  });
+
+  setGrid(finalGrid);
+  setAnimatingCells(newTileAnimations);
+
+  // Wait for new tiles to finish falling
+  await new Promise(resolve => setTimeout(resolve, 350));
+  setAnimatingCells(new Map());
+
+  // Update score / check deprecation / merge cell reset
+  setScore(score + finalValue);
+  checkDeprecation(finalValue);
+  setTimeout(() => setMergedCell(null), 150);
+
+  if (finalValue > highestValue) {
+    setHighestValue(finalValue);
+    cleanGridBasedOnRange(finalGrid, finalValue);
+  }
+
+  setIsProcessing(false);
+};
 
       const cleanGridBasedOnRange = (currentGrid, newHighest) => {
         const allNumbers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216];
@@ -543,34 +543,10 @@ const formatNumber = (num) => {
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-200 p-4">
           <style>
             {`
-              @keyframes dropIn-1 {
-                from { transform: translateY(-68px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-2 {
-                from { transform: translateY(-136px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-3 {
-                from { transform: translateY(-204px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-4 {
-                from { transform: translateY(-272px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-5 {
-                from { transform: translateY(-340px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-6 {
-                from { transform: translateY(-408px); }
-                to { transform: translateY(0); }
-              }
-              @keyframes dropIn-7 {
-                from { transform: translateY(-476px); }
-                to { transform: translateY(0); }
-              }
+              @keyframes tileDrop {
+  from { transform: translateY(var(--startY)); }
+  to { transform: translateY(0); }
+}
               @keyframes popMerge {
                 0% { transform: scale(1); }
                 50% { transform: scale(1.15); }
@@ -659,11 +635,10 @@ textShadow: getTextColorForBackground(COLORS[value]) === '#FFFFFF'
                             : dropDistance
                               ? 'transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1)' 
                               : 'all 0.2s ease',
-                        ...(dropDistance && {
-                          animation: `dropIn-${dropDistance} 0.35s cubic-bezier(0.22, 0.61, 0.36, 1)`,
-                          animationFillMode: 'backwards',
-                          animationDelay: '${(dropDistance - 1) * 0.04}s'
-                        }),
+                      animation: dropDistance || newTileAnimations.get(cellKey)
+    ? 'tileDrop 0.35s cubic-bezier(0.22,0.61,0.36,1) forwards'
+    : undefined,
+  '--startY': '${-((dropDistance || newTileAnimations.get(cellKey)) * CELL_SIZE)}px',
                         ...(isMerged && !suckDirection && {
                           animation: 'popMerge 0.4s ease-out'
                         })
