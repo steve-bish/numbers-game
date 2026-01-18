@@ -369,8 +369,7 @@ const formatNumber = (num) => {
         return currentValue;
       };
 
-      // 🔧 CHANGED: strict 3-phase animation flow
-const handleDragEnd = async () => {
+      const handleDragEnd = async () => {
   if (!isDragging || path.length < 2 || isProcessing) {
     setIsDragging(false);
     setPath([]);
@@ -378,101 +377,96 @@ const handleDragEnd = async () => {
   }
 
   setIsProcessing(true);
-
   const finalValue = getPathValue();
   const lastCell = path[path.length - 1];
+  const pathCoords = path.slice(0, -1); // All cells except the one we merge into
 
-  /* 1️⃣ SUCTION */
+  // --- PHASE 1: SUCTION ---
   const suckMap = new Map();
-  path.slice(0, -1).forEach(cell => {
+  pathCoords.forEach(cell => {
+    // Calculate pixel distance to the target cell (approx 68px including gap)
     suckMap.set(`${cell.row}-${cell.col}`, {
-      deltaRow: lastCell.row - cell.row,
-      deltaCol: lastCell.col - cell.col
+      x: (lastCell.col - cell.col) * 68,
+      y: (lastCell.row - cell.row) * 68
     });
   });
 
+  setSuckingCells(suckMap);
   setIsDragging(false);
   setPath([]);
-  setSuckingCells(suckMap);
-  setMergedCell(`${lastCell.row}-${lastCell.col}`);
   triggerHaptic('heavy');
 
-  await new Promise(r => setTimeout(r, 180));
+  await new Promise(r => setTimeout(r, 200));
 
-  /* remove sucked cells */
-  const removed = new Set(path.slice(0, -1).map(c => `${c.row}-${c.col}`));
-  setRemovedCells(removed);
-  setSuckingCells(new Map());
-
-  await new Promise(r => setTimeout(r, 150));
-
-  /* update merged value */
-  const g1 = grid.map(r => [...r]);
-  g1[lastCell.row][lastCell.col] = finalValue;
-
-  /* 2️⃣ EXISTING TILE DROP */
+  // --- PHASE 2: EXISTING TILES GRAVITY ---
+  const newGrid = grid.map(row => [...row]);
   const dropMap = new Map();
-  const affectedCols = new Set(path.map(p => p.col));
 
-  affectedCols.forEach(col => {
-    for (let r = GRID_HEIGHT - 1; r >= 0; r--) {
-      if (removed.has(`${r}-${col}`)) g1[r][col] = 0;
-    }
+  // Mark sucked cells as empty
+  pathCoords.forEach(c => { newGrid[c.row][c.col] = 0; });
+  // Update the merge target
+  newGrid[lastCell.row][lastCell.col] = finalValue;
+  setMergedCell(`${lastCell.row}-${lastCell.col}`);
 
-    for (let r = GRID_HEIGHT - 1; r >= 0; r--) {
-      if (g1[r][col] === 0) {
-        for (let a = r - 1; a >= 0; a--) {
-          if (g1[a][col] !== 0) {
-            g1[r][col] = g1[a][col];
-            g1[a][col] = 0;
-            dropMap.set(`${r}-${col}`, r - a);
-            break;
-          }
-        }
+  // Process gravity column by column
+  for (let col = 0; col < GRID_WIDTH; col++) {
+    let emptySpaces = 0;
+    for (let row = GRID_HEIGHT - 1; row >= 0; row--) {
+      if (newGrid[row][col] === 0) {
+        emptySpaces++;
+      } else if (emptySpaces > 0) {
+        // Move the number down
+        const value = newGrid[row][col];
+        newGrid[row + emptySpaces][col] = value;
+        newGrid[row][col] = 0;
+        // Record how many rows it fell for the animation
+        dropMap.set(`${row + emptySpaces}-${col}`, emptySpaces);
       }
     }
-  });
-
-  setGrid(g1);
-  setRemovedCells(new Set());
-  setAnimatingCells(dropMap);
-
-  await new Promise(r => setTimeout(r, 350));
-  setAnimatingCells(new Map());
-
-  /* 3️⃣ NEW TILE DROP */
-  const g2 = g1.map(r => [...r]);
-  const spawnMap = new Map();
-
-  affectedCols.forEach(col => {
-    let empty = 0;
-    for (let r = 0; r < GRID_HEIGHT; r++) {
-      if (g2[r][col] === 0) empty++;
-    }
-    for (let i = 0; i < empty; i++) {
-      g2[i][col] = getRandomNumber();
-      spawnMap.set(`${i}-${col}`, empty - i);
-    }
-  });
-
-  setGrid(g2);
-  setAnimatingCells(spawnMap);
-
-  await new Promise(r => setTimeout(r, 350));
-  setAnimatingCells(new Map());
-
-  /* cleanup */
-  setMergedCell(null);
-  setScore(score + finalValue);
-  checkDeprecation(finalValue);
-
-  if (finalValue > highestValue) {
-    setHighestValue(finalValue);
-    cleanGridBasedOnRange(g2, finalValue);
   }
 
+  setSuckingCells(new Map());
+  setGrid(newGrid);
+  setAnimatingCells(dropMap);
+
+  await new Promise(r => setTimeout(r, 400));
+
+  // --- PHASE 3: NEW TILES GRAVITY ---
+  const finalGrid = newGrid.map(row => [...row]);
+  const spawnMap = new Map();
+
+  for (let col = 0; col < GRID_WIDTH; col++) {
+    let emptyCount = 0;
+    for (let row = 0; row < GRID_HEIGHT; row++) {
+      if (finalGrid[row][col] === 0) emptyCount++;
+    }
+    
+    // Fill from top
+    for (let i = 0; i < emptyCount; i++) {
+      finalGrid[i][col] = getRandomNumber();
+      // Start them from way above the grid
+      spawnMap.set(`${i}-${col}`, emptyCount + 2); 
+    }
+  }
+
+  setGrid(finalGrid);
+  setAnimatingCells(spawnMap);
+
+  await new Promise(r => setTimeout(r, 400));
+
+  // --- CLEANUP ---
+  setAnimatingCells(new Map());
+  setMergedCell(null);
+  setScore(s => s + finalValue);
+  checkDeprecation(finalValue);
+  
+  if (finalValue > highestValue) {
+    setHighestValue(finalValue);
+  }
+  
   setIsProcessing(false);
 };
+
 
       const cleanGridBasedOnRange = (currentGrid, newHighest) => {
         const allNumbers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216];
@@ -527,21 +521,28 @@ const handleDragEnd = async () => {
 
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-200 p-4">
-  <style>
-{`
-  /* 🔧 CHANGED: unified gravity animation */
-  @keyframes tileDrop {
-    from { transform: translateY(var(--startY)); }
-    to { transform: translateY(0); }
+<style>
+  @keyframes gravityDrop {
+    0% { transform: translateY(var(--startY)); }
+    60% { transform: translateY(10px); } /* Slight over-drop */
+    80% { transform: translateY(-5px); } /* Small bounce up */
+    100% { transform: translateY(0); }
+  }
+
+  @keyframes suction {
+    to {
+      transform: translate(var(--suckX), var(--suckY)) scale(0);
+      opacity: 0;
+    }
   }
 
   @keyframes popMerge {
     0% { transform: scale(1); }
-    50% { transform: scale(1.15); }
+    50% { transform: scale(1.3); }
     100% { transform: scale(1); }
   }
-`}
 </style>
+
           <div className="bg-white rounded-3xl p-8 shadow-2xl" style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-4xl font-bold text-gray-800" style={{ fontWeight: 600 }}>Number Merge</h1>
@@ -579,71 +580,50 @@ const handleDragEnd = async () => {
               onPointerCancel={handleDragEnd}
             >
               {grid.map((row, rowIndex) =>
-                row.map((value, colIndex) => {
-                  const cellKey = `${rowIndex}-${colIndex}`;
-                  const isInPath = path.some(p => p.row === rowIndex && p.col === colIndex);
-                  const dropDistance = animatingCells.get(cellKey);
-                  const isRemoved = removedCells.has(cellKey);
-                  const isMerged = mergedCell === cellKey;
-                  const suckDirection = suckingCells.get(cellKey);
-                  
-                  let transform = 'translateY(0)';
-                  if (isInPath) {
-                    transform = 'scale(1.08)';
-                  } else if (suckDirection) {
-                    const moveX = suckDirection.deltaCol * 68;
-                    const moveY = suckDirection.deltaRow * 68;
-                    transform = `translate(${moveX}px, ${moveY}px) scale(0.5)`;
-                  } else if (isRemoved) {
-                    transform = 'scale(0)';
-                  }
-                  
-                  return (
-                    <div
-                      key={cellKey}
-                      className="grid-cell w-16 h-16 flex items-center justify-center rounded-2xl font-bold text-xl cursor-pointer"
-                      style={{
-                        backgroundColor: COLORS[value] || '#E0E0E0',
-                        color: getTextColorForBackground(COLORS[value]),
-textShadow: getTextColorForBackground(COLORS[value]) === '#FFFFFF'
-  ? '0 1px 2px rgba(0,0,0,0.45)'
-  : 'none',
-                        transform: transform,
-                        boxShadow: isInPath 
-                          ? '0 8px 24px rgba(0,0,0,0.2), 0 0 0 3px rgba(66, 153, 225, 0.5)' 
-                          : isMerged
-                            ? '0 8px 24px rgba(0,0,0,0.25)'
-                            : '0 2px 8px rgba(0,0,0,0.1)',
-                        touchAction: 'none',
-                        opacity: isRemoved ? 0 : suckDirection ? 0.7 : 1,
-                        transition: suckDirection
-                          ? 'all 0.18s cubic-bezier(0.25, 1, 0.5, 1)'
-                          : isRemoved 
-                            ? 'all 0.3s ease-out' 
-                            : dropDistance
-                              ? 'transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1)' 
-                              : 'all 0.2s ease',
-                        /* 🔧 CHANGED: dynamic gravity */
-animation: dropDistance
-  ? 'tileDrop 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) forwards'
-  : isMerged
-    ? 'popMerge 0.4s ease-out'
-    : undefined,
+  row.map((value, colIndex) => {
+    const cellKey = `${rowIndex}-${colIndex}`;
+    const isInPath = path.some(p => p.row === rowIndex && p.col === colIndex);
+    const dropDistance = animatingCells.get(cellKey);
+    const suckData = suckingCells.get(cellKey);
+    const isMerged = mergedCell === cellKey;
 
-'--startY': dropDistance
-  ? `${-dropDistance * 68}px`
-  : '0px',
-                        ...(isMerged && !suckDirection && {
-                          animation: 'popMerge 0.4s ease-out'
-                        })
-                      }}
-                      onPointerDown={() => !isProcessing && handleDragStart(rowIndex, colIndex)}
-                    >
-                      {formatNumber(value)}
-                    </div>
-                  );
-                })
-              )}
+    let style = {
+      backgroundColor: COLORS[value] || '#E0E0E0',
+      color: getTextColorForBackground(COLORS[value]),
+      // Logic for animations
+      '--startY': `${-(dropDistance || 0) * 68}px`,
+      '--suckX': `${suckData?.x || 0}px`,
+      '--suckY': `${suckData?.y || 0}px`,
+    };
+
+    let animation = '';
+    if (dropDistance) {
+      animation = 'gravityDrop 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards';
+    } else if (suckData) {
+      animation = 'suction 0.2s ease-in forwards';
+    } else if (isMerged) {
+      animation = 'popMerge 0.3s ease-out';
+    }
+
+    return (
+      <div
+        key={cellKey}
+        className="grid-cell w-16 h-16 flex items-center justify-center rounded-2xl font-bold text-xl transition-all"
+        style={{
+          ...style,
+          animation: animation,
+          transform: isInPath ? 'scale(1.1)' : 'none',
+          opacity: value === 0 ? 0 : 1,
+          zIndex: isInPath ? 10 : 1
+        }}
+        onPointerDown={() => !isProcessing && handleDragStart(rowIndex, colIndex)}
+      >
+        {value !== 0 ? formatNumber(value) : ''}
+      </div>
+    );
+  })
+)}
+
               
               {path.length > 1 && (
                 <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%' }}>
