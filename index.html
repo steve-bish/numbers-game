@@ -2,10 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Number Merge Mobile</title>
+  <meta name="apple-mobile-web-app-title" content="Number Merge">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23111827'/><text y='70' x='10' font-family='sans-serif' font-weight='bold' font-size='70' fill='white'>M</text></svg>">
+  
+  <title>Number Merge</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -14,27 +18,16 @@
   
   <style>
     body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #f3f4f6;
-      touch-action: none;
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      overflow: hidden; background-color: #f3f4f6; touch-action: none;
+      -webkit-tap-highlight-color: transparent; user-select: none;
     }
 
-    #root {
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+    #root { height: 100%; display: flex; align-items: center; justify-content: center; }
 
     /* --- ANIMATIONS --- */
     @keyframes gravityDrop {
       0% { transform: translateY(var(--startY)); }
-      60% { transform: translateY(8px); }
-      80% { transform: translateY(-4px); }
       100% { transform: translateY(0); }
     }
 
@@ -55,19 +48,27 @@
     }
 
     .particle {
-      position: absolute;
-      pointer-events: none;
-      border-radius: 50%;
-      z-index: 50;
-      animation: particleFade 0.6s ease-out forwards;
+      position: absolute; pointer-events: none; border-radius: 50%;
+      z-index: 60; animation: particleFade 0.6s ease-out forwards;
     }
+
+    .cell-text { position: relative; z-index: 40; pointer-events: none; }
+    
+    .grid-cell { transition: background-color 0.2s, box-shadow 0.2s, border 0.2s; }
+
+    @keyframes indicatorPop {
+      0% { transform: scale(0.8); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .preview-pop { animation: indicatorPop 0.2s cubic-bezier(0.17, 0.67, 0.83, 0.67) forwards; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef, useCallback } = React;
+    const { useState, useEffect, useRef, useMemo } = React;
 
     const GRID_WIDTH = 5;
     const GRID_HEIGHT = 7;
@@ -95,7 +96,6 @@
       const [mergedCell, setMergedCell] = useState(null);
       const gridRef = useRef(null);
 
-      // Initialize
       useEffect(() => {
         const saved = localStorage.getItem('mergeSave');
         if (saved) {
@@ -113,16 +113,16 @@
         );
         setGrid(startGrid);
         setScore(0);
+        setPath([]);
       };
 
       const spawnParticles = (row, col, color) => {
-        const newParticles = Array.from({ length: 12 }).map((_, i) => ({
-          id: Date.now() + i,
-          row, col,
-          color,
-          tx: (Math.random() - 0.5) * 150,
-          ty: (Math.random() - 0.5) * 150,
-          size: Math.random() * 8 + 4
+        const newParticles = Array.from({ length: 15 }).map((_, i) => ({
+          id: Math.random() + i,
+          row, col, color,
+          tx: (Math.random() - 0.5) * 200,
+          ty: (Math.random() - 0.5) * 200,
+          size: Math.random() * 6 + 4
         }));
         setParticles(prev => [...prev, ...newParticles]);
         setTimeout(() => setParticles(prev => prev.filter(p => !newParticles.includes(p))), 600);
@@ -143,7 +143,6 @@
         const last = path[path.length - 1];
         if (last.row === r && last.col === c) return;
 
-        // Backtracking
         if (path.length > 1) {
           const secondLast = path[path.length - 2];
           if (secondLast.row === r && secondLast.col === c) {
@@ -152,18 +151,20 @@
           }
         }
 
-        // Adjacency and Value Check
         const isAdj = Math.abs(last.row - r) <= 1 && Math.abs(last.col - c) <= 1;
         const val = grid[r][c];
         const lastVal = grid[last.row][last.col];
+
         if (isAdj && !path.find(p => p.row === r && p.col === c)) {
-          if (val === lastVal || (path.length > 1 && val === lastVal * 2)) {
-            setPath([...path, { row: r, col: c }]);
+          if (path.length === 1) {
+            if (val === lastVal) setPath([...path, { row: r, col: c }]);
+          } else {
+            if (val === lastVal || val === lastVal * 2) setPath([...path, { row: r, col: c }]);
           }
         }
       };
 
-      const getPathValue = () => {
+      const pathValue = useMemo(() => {
         if (path.length === 0) return 0;
         let total = grid[path[0].row][path[0].col];
         for(let i = 1; i < path.length; i++) {
@@ -171,86 +172,98 @@
           if (v === total || v === total * 2) total *= 2;
         }
         return total;
-      };
+      }, [path, grid]);
 
       const handleDragEnd = async () => {
         if (path.length < 2) { setPath([]); return; }
         setIsProcessing(true);
-        const finalVal = getPathValue();
+
+        const finalVal = pathValue;
         const last = path[path.length - 1];
         const others = path.slice(0, -1);
+        const mergeColor = COLORS[finalVal] || '#fff';
 
-        // 1. Suction
         const suck = new Map();
-        others.forEach(p => suck.set(`${p.row}-${p.col}`, { x: (last.col - p.col) * 66, y: (last.row - p.row) * 66 }));
+        others.forEach(p => suck.set(`${p.row}-${p.col}`, { x: (last.col - p.col) * 70, y: (last.row - p.row) * 70 }));
         setSuckingCells(suck);
-        setPath([]);
-
+        
         await new Promise(r => setTimeout(r, 200));
 
-        // 2. Explosion & Gravity Update
-        spawnParticles(last.row, last.col, COLORS[finalVal] || '#fff');
+        spawnParticles(last.row, last.col, mergeColor);
         const g1 = grid.map(row => [...row]);
         others.forEach(p => g1[p.row][p.col] = 0);
         g1[last.row][last.col] = finalVal;
-        setMergedCell(`${last.row}-${last.col}`);
+        
+        setPath([]);
         setSuckingCells(new Map());
+        setMergedCell(`${last.row}-${last.col}`);
+        setGrid(g1);
+        setScore(s => s + finalVal);
 
+        await new Promise(r => setTimeout(r, 100));
+
+        const g2 = g1.map(row => [...row]);
         const drops = new Map();
         for (let c = 0; c < GRID_WIDTH; c++) {
           let empty = 0;
           for (let r = GRID_HEIGHT - 1; r >= 0; r--) {
-            if (g1[r][c] === 0) empty++;
+            if (g2[r][c] === 0) empty++;
             else if (empty > 0) {
-              g1[r+empty][c] = g1[r][c];
-              g1[r][c] = 0;
+              g2[r+empty][c] = g2[r][c];
+              g2[r][c] = 0;
               drops.set(`${r+empty}-${c}`, empty);
             }
           }
         }
-        setGrid(g1);
+        setGrid(g2);
         setAnimatingCells(drops);
 
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 300));
 
-        // 3. New Tiles
-        const g2 = g1.map(row => [...row]);
+        const g3 = g2.map(row => [...row]);
         const spawns = new Map();
         for (let c = 0; c < GRID_WIDTH; c++) {
-          let count = 0;
-          for (let r = 0; r < GRID_HEIGHT; r++) if (g2[r][c] === 0) count++;
-          for (let i = 0; i < count; i++) {
-            g2[i][c] = Math.pow(2, Math.floor(Math.random() * 3));
-            spawns.set(`${i}-${c}`, count + 1);
+          let emptyCount = 0;
+          for (let r = 0; r < GRID_HEIGHT; r++) if (g3[r][c] === 0) emptyCount++;
+          for (let r = 0; r < emptyCount; r++) {
+            g3[r][c] = Math.pow(2, Math.floor(Math.random() * 3));
+            spawns.set(`${r}-${c}`, emptyCount + 2);
           }
         }
-        setGrid(g2);
+        setGrid(g3);
         setAnimatingCells(spawns);
-        setScore(s => s + finalVal);
 
         await new Promise(r => setTimeout(r, 400));
         setAnimatingCells(new Map());
         setMergedCell(null);
         setIsProcessing(false);
-        localStorage.setItem('mergeSave', JSON.stringify({ grid: g2, score: score + finalVal }));
+        localStorage.setItem('mergeSave', JSON.stringify({ grid: g3, score: score + finalVal }));
       };
 
+      const formatVal = (v) => v >= 1000 ? (v/1000)+'K' : v;
+
       return (
-        <div className="flex flex-col items-center justify-between h-full w-full max-w-md py-8 px-4">
+        <div className="flex flex-col items-center justify-between h-full w-full max-w-md py-12 px-4">
           <div className="w-full flex justify-between items-center px-2">
-            <div>
-              <h1 className="text-3xl font-black text-gray-800 tracking-tighter">MERGE</h1>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Puzzle Game</p>
-            </div>
+            <h1 className="text-3xl font-black text-gray-800 tracking-tighter leading-none">MERGE</h1>
             <div className="bg-white shadow-sm border border-gray-100 px-6 py-2 rounded-2xl text-center">
               <p className="text-[10px] font-bold text-gray-400 uppercase">Score</p>
               <p className="text-xl font-black text-gray-800">{score.toLocaleString()}</p>
             </div>
           </div>
 
+          <div className="h-24 flex items-center justify-center w-full">
+            {path.length > 1 && (
+              <div key={pathValue} className="preview-pop flex flex-col items-center justify-center bg-white w-24 h-24 rounded-full shadow-xl border-4" style={{ borderColor: COLORS[pathValue] }}>
+                <p className="text-[9px] font-bold text-gray-400 uppercase leading-none mb-1">Result</p>
+                <p className="text-3xl font-black" style={{ color: COLORS[pathValue] }}>{formatVal(pathValue)}</p>
+              </div>
+            )}
+          </div>
+
           <div 
             ref={gridRef}
-            className="relative grid gap-2 bg-gray-900 p-3 rounded-[2rem] shadow-2xl"
+            className="relative grid gap-2 bg-gray-900 p-3 rounded-[2.5rem] shadow-2xl overflow-hidden"
             style={{ gridTemplateColumns: `repeat(${GRID_WIDTH}, 1fr)` }}
             onTouchMove={handlePointerMove}
             onMouseMove={handlePointerMove}
@@ -261,7 +274,7 @@
               const key = `${r}-${c}`;
               const isPath = path.some(p => p.row === r && p.col === c);
               const suck = suckingCells.get(key);
-              const drop = animatingCells.get(key);
+              const dropDist = animatingCells.get(key);
               const isMerge = mergedCell === key;
 
               return (
@@ -270,21 +283,25 @@
                   data-coord={key}
                   onMouseDown={() => handleDragStart(r, c)}
                   onTouchStart={() => handleDragStart(r, c)}
-                  className="grid-cell w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center rounded-xl sm:rounded-2xl font-black text-lg sm:text-xl transition-all duration-100"
+                  className="grid-cell w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center rounded-2xl font-black text-lg sm:text-xl relative"
                   style={{
                     backgroundColor: COLORS[val] || '#374151',
-                    color: getTextColor(COLORS[val]),
                     opacity: val === 0 && !suck ? 0 : 1,
-                    transform: isPath ? 'scale(1.1)' : 'none',
-                    '--startY': `${-(drop || 0) * 74}px`,
+                    transform: isPath ? 'scale(1.15)' : 'none',
+                    zIndex: isPath ? 30 : 10,
+                    boxShadow: isPath ? `0 0 30px ${COLORS[pathValue]}cc` : 'none',
+                    border: isPath ? `3px solid white` : 'none',
+                    '--startY': `${-(dropDist || 0) * 100}%`,
                     '--suckX': `${suck?.x || 0}px`,
                     '--suckY': `${suck?.y || 0}px`,
-                    animation: drop ? 'gravityDrop 0.4s cubic-bezier(0.17, 0.67, 0.83, 0.67) forwards' : 
+                    animation: dropDist ? 'gravityDrop 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards' : 
                                suck ? 'suction 0.2s ease-in forwards' : 
                                isMerge ? 'popMerge 0.3s ease-out' : 'none'
                   }}
                 >
-                  {val > 0 ? (val >= 1000 ? (val/1000)+'K' : val) : ''}
+                  <span className="cell-text" style={{ color: getTextColor(COLORS[val]) }}>
+                    {val > 0 ? formatVal(val) : ''}
+                  </span>
                 </div>
               );
             }))}
@@ -296,7 +313,7 @@
                 className="particle"
                 style={{
                   left: `${p.col * 20 + 10}%`,
-                  top: `${p.row * 14 + 7}%`,
+                  top: `${p.row * 14.28 + 7.14}%`,
                   width: p.size, height: p.size,
                   backgroundColor: p.color,
                   '--tx': `${p.tx}px`, '--ty': `${p.ty}px`
@@ -305,10 +322,7 @@
             ))}
           </div>
 
-          <button 
-            onClick={resetGame}
-            className="w-full bg-gray-900 text-white font-black py-5 rounded-3xl shadow-xl active:scale-95 transition-transform uppercase tracking-widest text-sm"
-          >
+          <button onClick={resetGame} className="w-full bg-gray-900 text-white font-black py-5 rounded-3xl shadow-xl active:scale-95 transition-transform uppercase tracking-widest text-sm">
             New Game
           </button>
         </div>
